@@ -755,12 +755,23 @@ mod tests {
         assert!(!raw_links.contains("_filter:In"));
     }
 
-    /// The complete push set at 10 active bands: 112 controls (the preamp
-    /// b0..a2 for both sides + every band's Freq/Q/Gain and the mixer
-    /// Gain 1/2 for both sides). Matches the "pushed 112 control(s)"
-    /// device_push_live log line -- the count is part of the wire contract.
+    /// The complete live push set: the DSP payload always covers ALL
+    /// `MAX_BANDS` faders (upstream pushes its full band list every update),
+    /// so every chain node is addressed on every push — a band deactivated
+    /// from the visible prefix is crossed to dry instead of keeping the last
+    /// wet controls it was pushed. 12 preamp coefficients + 10 controls per
+    /// band, both sides = 332 at 32 bands.
     #[test]
     fn native_control_set_covers_the_full_push() {
+        let full = native_biquad_control_values(&default_bands(), 0.0, true);
+        assert_eq!(
+            full.len(),
+            12 + crate::core::MAX_BANDS * 10,
+            "preamp b0..a2 both sides + 10 controls per band, both sides"
+        );
+
+        // The 10-active-band case pins the per-band wire shape: exactly 112
+        // controls (12 + 10 bands x 10), matching the historical log line.
         // Runtime pushes only the active fader set (chain.bands holds the
         // fader snapshot, 10 bands by default), not all 32 slots.
         let bands = &default_bands()[..crate::core::DEFAULT_ACTIVE_BANDS];
@@ -802,8 +813,8 @@ mod tests {
     /// the DSP struct parser pairs (String, Float) strictly).
     #[test]
     fn wire_bytes_round_trip_the_control_values() {
-        let bands = &default_bands()[..crate::core::DEFAULT_ACTIVE_BANDS];
-        let controls = native_biquad_control_values(bands, 0.0, true);
+        // The real live payload: all MAX_BANDS faders.
+        let controls = native_biquad_control_values(&default_bands(), 0.0, true);
         let data = crate::pipewire_backend::build_props_controls_pod_bytes(&controls)
             .expect("pod should build");
 

@@ -1078,6 +1078,122 @@ impl WirEqWindow {
         *fader_cells.borrow_mut() = fader_row_cells;
         *fader_scrolled.borrow_mut() = Some(band_scrolled.clone());
 
+        // --- Band-count stepper (the +/- next to the "N Bands" chip).
+        //
+        // + activates the first slot beyond the visible prefix as a flat Bell
+        // at its log-spaced frequency (upstream derives the same slots from
+        // `compute_log_spaced_band_defaults`); − deactivates the last visible
+        // band. The profile count IS the visible prefix, so the fader row,
+        // the DSP payload and the chip follow through the same paths a
+        // preset load uses: the chain rebuilds when a type change makes the
+        // node labels differ, and Off bands cross to dry so nothing is left
+        // audibly active.
+        {
+            let registry = fader_registry.clone();
+            let cells = fader_cells.clone();
+            let scrolled = fader_scrolled.clone();
+            let visible = visible_band_count.clone();
+            let graph = utility.graph.clone();
+            let refresh = refresh_editor.clone();
+            let smooth = utility.headroom.borrow().smooth.clone();
+            utility
+                .graph
+                .borrow()
+                .band_add_button
+                .connect_clicked(move |_| {
+                    let count = visible.get();
+                    if count >= crate::core::MAX_BANDS {
+                        return;
+                    }
+                    let band = crate::core::default_bands()[count].clone();
+                    let solo_active = registry.borrow().iter().any(|f| f.borrow().soloed);
+                    if let Some(fader) = registry.borrow().get(count).cloned() {
+                        let mut f = fader.borrow_mut();
+                        let selected = f.selected;
+                        f.smooth_override = smooth.get();
+                        f.set_band_state(
+                            0.0,
+                            band.frequency,
+                            crate::window_band_fader::format_frequency_label(band.frequency),
+                            band.q,
+                            crate::window_band_fader::format_q_label(band.q),
+                            crate::core::FilterType::Bell,
+                            crate::band_fader::filter_type_short_label(
+                                crate::core::FilterType::Bell,
+                            )
+                            .into(),
+                            selected,
+                            true,
+                            false,
+                            false,
+                            solo_active,
+                        );
+                        f.drawing_area.queue_draw();
+                    }
+                    visible.set(apply_visible_band_count(
+                        scrolled.borrow().as_ref(),
+                        &cells.borrow(),
+                        &registry.borrow(),
+                        Some(&graph),
+                        count + 1,
+                    ));
+                    refresh();
+                });
+        }
+        {
+            let registry = fader_registry.clone();
+            let cells = fader_cells.clone();
+            let scrolled = fader_scrolled.clone();
+            let visible = visible_band_count.clone();
+            let graph = utility.graph.clone();
+            let refresh = refresh_editor.clone();
+            utility
+                .graph
+                .borrow()
+                .band_remove_button
+                .connect_clicked(move |_| {
+                    let count = visible.get();
+                    if count <= 1 {
+                        return;
+                    }
+                    let last = count - 1;
+                    let solo_active = registry.borrow().iter().any(|f| f.borrow().soloed);
+                    if let Some(fader) = registry.borrow().get(last).cloned() {
+                        let mut f = fader.borrow_mut();
+                        let frequency = f.frequency;
+                        let q = f.q_value;
+                        let frequency_label = f.frequency_label.clone();
+                        let q_label = f.q_label.clone();
+                        f.set_band_state(
+                            0.0,
+                            frequency,
+                            frequency_label,
+                            q,
+                            q_label,
+                            crate::core::FilterType::Off,
+                            crate::band_fader::filter_type_short_label(
+                                crate::core::FilterType::Off,
+                            )
+                            .into(),
+                            false,
+                            false,
+                            false,
+                            false,
+                            solo_active,
+                        );
+                        f.drawing_area.queue_draw();
+                    }
+                    visible.set(apply_visible_band_count(
+                        scrolled.borrow().as_ref(),
+                        &cells.borrow(),
+                        &registry.borrow(),
+                        Some(&graph),
+                        last,
+                    ));
+                    refresh();
+                });
+        }
+
         // Drop the output row's captions when the row gets narrow. Driven from
         // the tick because there is no usable size-change signal: GTK4 does not
         // emit `notify::width` on a FlowBox, and libadwaita applies only one
@@ -1607,11 +1723,18 @@ impl WirEqWindow {
                 // Smooth override: the graph, the peak estimate and the
                 // backend push must all see the SAME effective bands, or the
                 // displayed curve would disagree with the audio.
+                //
+                // The payload covers ALL faders (upstream pushes its full
+                // 32-band list on every update): every chain node must be
+                // addressed on every push, or a band removed from the visible
+                // prefix would keep the last wet controls it was pushed --
+                // audibly stuck. Off bands are identity (the mixer crosses to
+                // dry), and the graph skips Off bands when drawing dots, so
+                // the hidden tail is both silent and invisible.
                 let smooth_on = headroom.borrow().smooth.get();
                 let spread = headroom.borrow().smooth_spread_bands.get();
                 let bands: Vec<crate::core::EqBand> = band_faders
                     .iter()
-                    .take(visible_band_count_tick.get())
                     .map(|f| {
                         let fader = f.borrow();
                         crate::core::EqBand {
@@ -1736,6 +1859,15 @@ impl WirEqWindow {
                         .borrow()
                         .band_count_label
                         .set_text(&count_text);
+                }
+                // Stepper bounds: + dies at MAX_BANDS, − keeps at least one
+                // fader in the row (upstream clamps the count to 1..=MAX).
+                {
+                    let g = graph_handle_for_focus.borrow();
+                    let count = visible_band_count_tick.get();
+                    g.band_add_button
+                        .set_sensitive(count < crate::core::MAX_BANDS);
+                    g.band_remove_button.set_sensitive(count > 1);
                 }
                 let output_preset_for_state =
                     crate::core::output_preset_for_sink(&engine_sink.borrow());

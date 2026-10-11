@@ -17,6 +17,12 @@ drag editing, exit reliability). Ranked next steps:
    apply/reset/restore, with a horizontal scrollbar beyond 10 bands
    (upstream `set_visible_band_count` parity; the 648px window minimum
    and the compact ≤10-band row are unchanged).
+   EXTENDED 2026-10-11: a +/− band-count stepper next to the "N Bands"
+   chip activates the next log-spaced slot as a flat Bell / deactivates
+   the last visible band, so the profile width is editable in the UI
+   without loading a profile. The tick payload now always covers all 32
+   faders (332 controls), which also fixes deactivated nodes keeping
+   their last wet controls after a shrink (docs/BUGS.md).
 3. ~~**Controller-pattern UX**~~ — DONE 2026-10-11: while a graph dot or
    a fader is dragged, the band payload pushes ride the 33 ms tick
    (upstream's 16 ms class) so the curve follows the mouse live; outside

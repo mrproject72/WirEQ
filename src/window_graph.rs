@@ -291,6 +291,10 @@ pub struct EqGraph {
     /// the visible band count.
     pub focus_label: gtk4::Label,
     pub band_count_label: gtk4::Label,
+    /// The band-count stepper next to the chip: `−` deactivates the last
+    /// visible band, `+` activates the next log-spaced slot as a flat Bell.
+    pub band_remove_button: gtk4::Button,
+    pub band_add_button: gtk4::Button,
     /// Output-monitor on/off switch, placed in the graph header (right of the
     /// "Frequency Response" title) so it sits directly above the spectrum.
     pub monitor_switch: gtk4::Switch,
@@ -370,8 +374,18 @@ impl EqGraph {
         focus_label.set_halign(gtk4::Align::End);
         focus_label.set_valign(gtk4::Align::Center);
         focus_label.set_css_classes(&["caption"]);
+        let band_remove_button = gtk4::Button::from_icon_name("list-remove-symbolic");
+        band_remove_button.set_css_classes(&["flat"]);
+        band_remove_button.set_valign(gtk4::Align::Center);
+        band_remove_button.set_tooltip_text(Some("Deactivate the last band"));
+        let band_add_button = gtk4::Button::from_icon_name("list-add-symbolic");
+        band_add_button.set_css_classes(&["flat"]);
+        band_add_button.set_valign(gtk4::Align::Center);
+        band_add_button.set_tooltip_text(Some("Add a band (next log-spaced slot)"));
         focus_row.set_hexpand(true);
         focus_row.append(&band_count_label);
+        focus_row.append(&band_remove_button);
+        focus_row.append(&band_add_button);
         let focus_spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         focus_spacer.set_hexpand(true);
         focus_row.append(&focus_spacer);
@@ -412,6 +426,8 @@ impl EqGraph {
             response_area,
             focus_label,
             band_count_label,
+            band_remove_button,
+            band_add_button,
             monitor_switch,
             header,
             header_spacer,

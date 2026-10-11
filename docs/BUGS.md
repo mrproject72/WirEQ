@@ -2,6 +2,26 @@
 
 ## Open Bugs
 
+### FIXED 2026-10-11 — Deactivated band nodes kept their last wet controls
+
+**Symptom the band-count stepper exposed (pre-existing for preset
+shrinks):** the tick's DSP push addressed only the visible band prefix.
+When the prefix shrank (a 20-band preset replaced by a 10-band one), the
+chain nodes beyond the new prefix kept the last wet controls they were
+pushed — mixers still crossed to the filter, gains still applied — so
+removed bands stayed **audibly active** with no fader to control them.
+No live test caught it: the suites check control counts and link state,
+not per-node wet values after a shrink.
+
+**Fix (upstream parity):** the tick payload now covers ALL `MAX_BANDS`
+faders on every push (332 controls), exactly like upstream, which always
+pushes its full 32-band list. Off bands cross to dry
+(`native_biquad_band_control_values` sets `Gain 1 = 0`), so anything
+dropped from the visible prefix is neutralised by the next push, and the
+graph skips Off bands when drawing dots, so the hidden tail is invisible.
+The startup push is 332, not 112; the 112 figure survives in the unit
+test as the 10-band wire-shape check.
+
 ### RESOLVED — A/B compare and the System-wide EQ switch
 
 **Verified working 2026-10-04** (user-confirmed: both the System-wide EQ switch
