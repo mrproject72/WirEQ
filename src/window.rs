@@ -1,6 +1,6 @@
 //! Main application window for wireq.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -10,6 +10,7 @@ use adw::prelude::*;
 use glib::ControlFlow;
 
 use crate::appearance::{AppearancePreference, apply_appearance_preference};
+use crate::core::DEFAULT_ACTIVE_BANDS;
 use crate::pipewire_backend::PipeWireBackend;
 use crate::style;
 use crate::window_band_editor::{BandEditor, BandEditorCallbacks};
@@ -44,6 +45,12 @@ fn device_initial_curve(dev: &str) -> (Vec<crate::core::EqBand>, f64) {
 
 /// Snapshot the live fader state as `EqBand`s (the shape the DSP/peak math uses).
 ///
+/// Only the first `visible` faders are included: the fader row carries all
+/// `MAX_BANDS` widgets (upstream builds the full grid and toggles card
+/// visibility), but bands beyond the visible prefix are inactive defaults
+/// and must stay out of the DSP payload — the chain/push shape follows the
+/// visible prefix, exactly as when the row held only the visible faders.
+///
 /// When `smooth` is set the Smooth override is applied on the way out:
 /// every non-`Off` band reports as the internal `Sin` bell. `spread_bands`
 /// is the spread in bands (Gaussian sigma); the bell Q is derived from it
@@ -53,10 +60,12 @@ fn fader_band_snapshot(
     registry: &Rc<RefCell<Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>>>,
     smooth: bool,
     spread_bands: f64,
+    visible: usize,
 ) -> Vec<crate::core::EqBand> {
     let bands: Vec<crate::core::EqBand> = registry
         .borrow()
         .iter()
+        .take(visible)
         .map(|f| {
             let fader = f.borrow();
             crate::core::EqBand {
@@ -93,6 +102,38 @@ fn edit_fader(
     };
     edit(&mut fader.borrow_mut());
     fader.borrow().drawing_area.queue_draw();
+}
+
+/// Clamp the visible fader prefix to `count` (upstream
+/// `set_visible_band_count`): toggle the card containers and adapt the
+/// scroller, then drop a selection that points beyond the new prefix
+/// (upstream `window_graph.py` clears `selected_band_index` the same way).
+/// Returns the clamped count.
+fn apply_visible_band_count(
+    scrolled: Option<&gtk4::ScrolledWindow>,
+    cells: &[gtk4::Box],
+    faders: &[Rc<RefCell<crate::band_fader::EqBandFader>>],
+    graph: Option<&Rc<RefCell<crate::window_graph::EqGraph>>>,
+    count: usize,
+) -> usize {
+    let count = window_layout::set_visible_band_fader_count(scrolled, cells, count);
+    if faders
+        .iter()
+        .skip(count)
+        .any(|fader| fader.borrow().selected)
+    {
+        for fader in faders.iter().skip(count) {
+            let mut f = fader.borrow_mut();
+            if f.selected {
+                f.selected = false;
+                f.drawing_area.queue_draw();
+            }
+        }
+        if let Some(graph) = graph {
+            graph.borrow_mut().set_selected_band(None);
+        }
+    }
+    count
 }
 
 /// Mirror `solo_active` onto every fader: upstream computes it once from the
@@ -393,6 +434,16 @@ impl WirEqWindow {
         // the layout is built, so the closure captures an empty cell for now.
         let fader_registry: Rc<RefCell<Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>>> =
             Rc::new(RefCell::new(Vec::new()));
+        // How many fader cards are shown. The row carries all MAX_BANDS
+        // widgets (upstream's build-once, toggle-visibility design); this
+        // prefix length is what every DSP payload, the graph and the
+        // band-count chip treat as "the bands". Preset loads set it via
+        // `fader_band_count_for_profile`.
+        let visible_band_count: Rc<Cell<usize>> = Rc::new(Cell::new(DEFAULT_ACTIVE_BANDS));
+        // The fader row's outer card containers + its ScrolledWindow, filled
+        // once the layout is built; the visibility switches need them.
+        let fader_cells: Rc<RefCell<Vec<gtk4::Box>>> = Rc::new(RefCell::new(Vec::new()));
+        let fader_scrolled: Rc<RefCell<Option<gtk4::ScrolledWindow>>> = Rc::new(RefCell::new(None));
         // Per-device live-curve memory: the fader/preamp state each output
         // device was last edited to, snapshotted on an output switch and
         // restored when the user comes back. Without it, switching devices
@@ -439,8 +490,10 @@ impl WirEqWindow {
             let refresh = refresh_editor.clone();
             let smooth = utility.headroom.borrow().smooth.clone();
             let spread_bands = utility.headroom.borrow().smooth_spread_bands.clone();
+            let visible = visible_band_count.clone();
             Rc::new(move |index, gain_db| {
-                let bands = fader_band_snapshot(&registry, smooth.get(), spread_bands.get());
+                let bands =
+                    fader_band_snapshot(&registry, smooth.get(), spread_bands.get(), visible.get());
                 let clamped = crate::core::clamp_gain_for_peak(
                     &bands,
                     index,
@@ -469,8 +522,12 @@ impl WirEqWindow {
                         for (other, weighted) in
                             crate::core::smooth_kernel_weights(index, delta, sigma, bands.len())
                         {
-                            let cur =
-                                fader_band_snapshot(&registry, smooth.get(), spread_bands.get());
+                            let cur = fader_band_snapshot(
+                                &registry,
+                                smooth.get(),
+                                spread_bands.get(),
+                                visible.get(),
+                            );
                             let Some(cur_band) = cur.get(other) else {
                                 continue;
                             };
@@ -502,11 +559,12 @@ impl WirEqWindow {
             let registry = fader_registry.clone();
             let smooth = utility.headroom.borrow().smooth.clone();
             let spread = utility.headroom.borrow().smooth_spread_bands.clone();
+            let visible = visible_band_count.clone();
             let headroom = utility.headroom.clone();
             let presets = utility.presets.clone();
             Rc::new(move || {
                 (
-                    fader_band_snapshot(&registry, smooth.get(), spread.get()),
+                    fader_band_snapshot(&registry, smooth.get(), spread.get(), visible.get()),
                     headroom.borrow().preamp_value(),
                     presets.borrow().current_preset_name(),
                 )
@@ -516,6 +574,10 @@ impl WirEqWindow {
             let registry = fader_registry.clone();
             let headroom = utility.headroom.clone();
             let presets = utility.presets.clone();
+            let visible = visible_band_count.clone();
+            let cells = fader_cells.clone();
+            let scrolled = fader_scrolled.clone();
+            let graph = utility.graph.clone();
             Rc::new(move |bands, preamp, name| {
                 presets.borrow_mut().set_current_preset_name(name);
                 headroom.borrow().set_preamp_value(preamp);
@@ -547,6 +609,17 @@ impl WirEqWindow {
                     );
                     f.drawing_area.queue_draw();
                 }
+                // The remembered curve was snapshotted from the then-visible
+                // prefix; its profile count is what the row shows again.
+                let count = crate::core::fader_band_count_for_profile(bands);
+                visible.set(count);
+                apply_visible_band_count(
+                    scrolled.borrow().as_ref(),
+                    &cells.borrow(),
+                    &registry.borrow(),
+                    Some(&graph),
+                    count,
+                );
             })
         };
 
@@ -628,7 +701,8 @@ impl WirEqWindow {
                 let registry = registry.clone();
                 let smooth = headroom.borrow().smooth.clone();
                 let spread = headroom.borrow().smooth_spread_bands.clone();
-                move || fader_band_snapshot(&registry, smooth.get(), spread.get())
+                let visible = visible_band_count.clone();
+                move || fader_band_snapshot(&registry, smooth.get(), spread.get(), visible.get())
             };
             let preamp_db = {
                 let headroom = headroom.clone();
@@ -992,14 +1066,17 @@ impl WirEqWindow {
         }));
         *editor_cell.borrow_mut() = Some(band_editor.clone());
 
-        let (split_view, band_scrolled, band_faders) = window_layout::build_main_layout(
-            &utility,
-            &band_editor,
-            crate::core::DEFAULT_ACTIVE_BANDS,
-            gain_request.clone(),
-            selection_callback,
-        );
+        let (split_view, band_scrolled, fader_row_cells, band_faders) =
+            window_layout::build_main_layout(
+                &utility,
+                &band_editor,
+                crate::core::DEFAULT_ACTIVE_BANDS,
+                gain_request.clone(),
+                selection_callback,
+            );
         *fader_registry.borrow_mut() = band_faders.clone();
+        *fader_cells.borrow_mut() = fader_row_cells;
+        *fader_scrolled.borrow_mut() = Some(band_scrolled.clone());
 
         // Drop the output row's captions when the row gets narrow. Driven from
         // the tick because there is no usable size-change signal: GTK4 does not
@@ -1479,6 +1556,7 @@ impl WirEqWindow {
             const PEAK_HOLD_PERIOD_S: f64 = 0.1;
             let snapshot_device_curve_tick = snapshot_device_curve.clone();
             let restore_device_curve_tick = restore_device_curve.clone();
+            let visible_band_count_tick = visible_band_count.clone();
 
             glib::timeout_add_local(std::time::Duration::from_millis(33), move || {
                 // --- Remote control (D-Bus) -----------------------------
@@ -1533,6 +1611,7 @@ impl WirEqWindow {
                 let spread = headroom.borrow().smooth_spread_bands.get();
                 let bands: Vec<crate::core::EqBand> = band_faders
                     .iter()
+                    .take(visible_band_count_tick.get())
                     .map(|f| {
                         let fader = f.borrow();
                         crate::core::EqBand {
@@ -1651,7 +1730,7 @@ impl WirEqWindow {
                 if graph_handle_for_focus.borrow().focus_label.text() != focus {
                     graph_handle_for_focus.borrow().focus_label.set_text(&focus);
                 }
-                let count_text = format!("{} Bands", band_faders.len());
+                let count_text = format!("{} Bands", visible_band_count_tick.get());
                 if graph_handle_for_focus.borrow().band_count_label.text() != count_text {
                     graph_handle_for_focus
                         .borrow()
@@ -2966,6 +3045,7 @@ impl WirEqWindow {
         {
             let headroom = utility.headroom.clone();
             let band_faders = band_faders.clone();
+            let visible = visible_band_count.clone();
             utility
                 .headroom
                 .borrow()
@@ -2973,6 +3053,7 @@ impl WirEqWindow {
                 .connect_clicked(move |_| {
                     let bands: Vec<crate::core::EqBand> = band_faders
                         .iter()
+                        .take(visible.get())
                         .map(|f| {
                             let fader = f.borrow();
                             crate::core::EqBand {
@@ -3010,13 +3091,23 @@ impl WirEqWindow {
             let apply_band_faders = band_faders.clone();
             let apply_headroom = utility.headroom.clone();
             let apply_refresh = refresh_editor.clone();
+            let apply_visible = visible_band_count.clone();
+            let apply_cells = fader_cells.clone();
+            let apply_scrolled = fader_scrolled.clone();
+            let apply_graph = utility.graph.clone();
             let reset_band_faders = band_faders.clone();
             let reset_headroom = utility.headroom.clone();
             let reset_refresh = refresh_editor.clone();
+            let reset_visible = visible_band_count.clone();
+            let reset_cells = fader_cells.clone();
+            let reset_scrolled = fader_scrolled.clone();
+            let reset_graph = utility.graph.clone();
             let sig_band_faders = band_faders.clone();
             let sig_headroom = utility.headroom.clone();
+            let sig_visible = visible_band_count.clone();
             let state_band_faders = band_faders.clone();
             let state_headroom = utility.headroom.clone();
+            let state_visible = visible_band_count.clone();
             presets.borrow_mut().set_callbacks(
                 Some(Box::new(move |bands, preamp| {
                     // Upstream re-syncs every fader from the loaded bands
@@ -3051,6 +3142,18 @@ impl WirEqWindow {
                         }
                     }
                     recompute_solo_active(&apply_band_faders);
+                    // Upstream `set_visible_band_count(fader_band_count_for_profile(
+                    // controller.bands))` right after the payload applies: the
+                    // row grows/shrinks with the profile, so a 20-band AutoEq
+                    // import shows (and pushes) all 20 bands.
+                    let count = crate::core::fader_band_count_for_profile(&bands);
+                    apply_visible.set(apply_visible_band_count(
+                        apply_scrolled.borrow().as_ref(),
+                        &apply_cells.borrow(),
+                        &apply_band_faders,
+                        Some(&apply_graph),
+                        count,
+                    ));
                     apply_refresh();
                 })),
                 Some(Box::new(move || {
@@ -3097,11 +3200,20 @@ impl WirEqWindow {
                         );
                         f.drawing_area.queue_draw();
                     }
+                    // The default profile is the 10-band prefix again.
+                    reset_visible.set(apply_visible_band_count(
+                        reset_scrolled.borrow().as_ref(),
+                        &reset_cells.borrow(),
+                        &reset_band_faders,
+                        Some(&reset_graph),
+                        crate::core::DEFAULT_ACTIVE_BANDS,
+                    ));
                     reset_refresh();
                 })),
                 Some(Box::new(move || {
                     let bands: Vec<crate::core::EqBand> = sig_band_faders
                         .iter()
+                        .take(sig_visible.get())
                         .map(|f| {
                             let fader = f.borrow();
                             crate::core::EqBand {
@@ -3127,6 +3239,7 @@ impl WirEqWindow {
                 Some(Box::new(move || {
                     let bands: Vec<crate::core::EqBand> = state_band_faders
                         .iter()
+                        .take(state_visible.get())
                         .map(|f| {
                             let fader = f.borrow();
                             crate::core::EqBand {

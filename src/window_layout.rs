@@ -11,6 +11,15 @@ use std::rc::Rc;
 
 /// Build the band fader row layout.
 ///
+/// All `MAX_BANDS` faders are built up front (upstream builds the full grid
+/// once and toggles card visibility); only the first `visible_bands` are
+/// shown. The extra widgets are cheap and keep preset loads O(1) —
+/// `set_visible_band_fader_count` flips visibility instead of rebuilding.
+///
+/// Returns the scroller, one outer container per fader (for visibility
+/// toggling; the homogeneous row only distributes space to visible
+/// children), and the fader handles.
+///
 /// `selection_changed_callback` receives the index of the band the user just
 /// selected; the owner is responsible for clearing the other faders (a fader
 /// cannot do that itself without holding borrows on its siblings).
@@ -26,6 +35,7 @@ pub fn build_band_faders(
     selection_changed_callback: Rc<dyn Fn(usize)>,
 ) -> (
     gtk4::ScrolledWindow,
+    Vec<gtk4::Box>,
     Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>,
 ) {
     let scrolled = gtk4::ScrolledWindow::new();
@@ -35,6 +45,8 @@ pub fn build_band_faders(
     // is forced to the viewport width and shrinks to fit. This prevents the
     // row from keeping its natural (72*10=738px) width and overflowing the
     // window — which was pushing the overlay side panel outside the viewport.
+    // `set_visible_band_fader_count` switches to AUTOMATIC when more bands
+    // are visible than fit, so the excess scrolls instead of shrinking.
     scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
     scrolled.set_min_content_height(200);
 
@@ -46,12 +58,14 @@ pub fn build_band_faders(
     // row shrinks to fit a narrow window instead of overflowing it.
     band_box.set_homogeneous(true);
 
+    let initial = visible_bands.clamp(1, MAX_BANDS);
+    let mut cells = Vec::new();
     let mut faders = Vec::new();
-    let count = visible_bands.clamp(1, MAX_BANDS);
-    // Upstream `compute_log_spaced_band_defaults` derives both frequency and Q
-    // from the band count, so the row spans 20 Hz..20 kHz across `count` bands.
-    let defaults = crate::core::compute_log_spaced_band_defaults(count);
-    for (i, (frequency, q)) in defaults.into_iter().enumerate() {
+    // Upstream builds the full MAX_BANDS grid and hides the tail; the default
+    // set carries the first DEFAULT_ACTIVE_BANDS as bells (log-spaced over the
+    // ACTIVE count, matching `default_bands()`), the tail Off at the 32-band
+    // spacing. Values are placeholders: a preset apply re-syncs every fader.
+    for (i, band) in crate::core::default_bands().into_iter().enumerate() {
         // Active bands must default to Bell (matching `core::default_bands()`).
         // With `Off` the wet/dry mix is 0, so dragging the fader changes gain
         // on a bypassed biquad and produces no audible effect.
@@ -60,22 +74,52 @@ pub fn build_band_faders(
         } else {
             crate::core::FilterType::Off
         };
-        let band = WindowBandFader::new(
+        let band_fader = WindowBandFader::new(
             i,
-            frequency,
+            band.frequency,
             0.0,
-            q,
+            band.q,
             filter_type,
             i < DEFAULT_ACTIVE_BANDS,
             gain_changed.clone(),
             selection_changed_callback.clone(),
         );
-        faders.push(band.fader.clone());
-        band_box.append(band.widget());
+        band_fader.widget().set_visible(i < initial);
+        cells.push(band_fader.widget().clone());
+        faders.push(band_fader.fader.clone());
+        band_box.append(band_fader.widget());
     }
 
     scrolled.set_child(Some(&band_box));
-    (scrolled, faders)
+    (scrolled, cells, faders)
+}
+
+/// Show the first `count` fader cards and adapt the horizontal scroll policy.
+///
+/// Up to the default band count the row keeps its compact shrink-to-fit
+/// behaviour (NEVER scroll). Beyond it the row's minimum width grows with the
+/// band count, so the scroller switches to AUTOMATIC: the window minimum
+/// width stays where it is and the excess bands get a horizontal scrollbar,
+/// each fader keeping its usable minimum width instead of being crushed.
+/// Returns the clamped count.
+pub fn set_visible_band_fader_count(
+    scrolled: Option<&gtk4::ScrolledWindow>,
+    cells: &[gtk4::Box],
+    count: usize,
+) -> usize {
+    let count = count.clamp(1, MAX_BANDS);
+    for (i, cell) in cells.iter().enumerate() {
+        cell.set_visible(i < count);
+    }
+    if let Some(scrolled) = scrolled {
+        let horizontal = if count > DEFAULT_ACTIVE_BANDS {
+            gtk4::PolicyType::Automatic
+        } else {
+            gtk4::PolicyType::Never
+        };
+        scrolled.set_policy(horizontal, gtk4::PolicyType::Automatic);
+    }
+    count
 }
 
 /// Fixed cell widths for the output row (see `fixed_cell`).
@@ -256,6 +300,7 @@ pub fn build_main_layout(
 ) -> (
     adw::OverlaySplitView,
     gtk4::ScrolledWindow,
+    Vec<gtk4::Box>,
     Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>,
 ) {
     let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
@@ -269,7 +314,7 @@ pub fn build_main_layout(
     let control_row = build_output_control_row(utility);
     main_box.append(&control_row);
 
-    let (band_scrolled, faders) =
+    let (band_scrolled, fader_cells, faders) =
         build_band_faders(visible_bands, gain_changed, selection_changed_callback);
     main_box.append(&band_scrolled);
 
@@ -293,5 +338,5 @@ pub fn build_main_layout(
     split_view.set_min_sidebar_width(300.0);
     split_view.set_max_sidebar_width(440.0);
 
-    (split_view, band_scrolled, faders)
+    (split_view, band_scrolled, fader_cells, faders)
 }

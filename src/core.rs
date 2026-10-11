@@ -1231,6 +1231,23 @@ pub fn default_bands() -> Vec<EqBand> {
     bands
 }
 
+/// Upstream `profile_band_count`: the number of bands up to and including the
+/// last non-`Off` band. A profile's fader row shows this prefix; the tail is
+/// always inactive defaults.
+pub fn profile_band_count(bands: &[EqBand]) -> usize {
+    bands
+        .iter()
+        .take(MAX_BANDS)
+        .rposition(|band| band.filter_type != FilterType::Off)
+        .map_or(0, |index| index + 1)
+}
+
+/// Upstream `fader_band_count_for_profile`: the fader row shows at least one
+/// band and never more than `MAX_BANDS`.
+pub fn fader_band_count_for_profile(bands: &[EqBand]) -> usize {
+    profile_band_count(bands).clamp(1, MAX_BANDS)
+}
+
 /// Built-in factory presets that ship with the app and cannot be removed by
 /// the user. They live in code (not the preset dir) so they always exist.
 pub const BUILTIN_PRESET_NAMES: &[&str] = &["Neutral", "Bass Boost", "Treble Boost"];
@@ -2715,6 +2732,43 @@ mod tests {
                 .iter()
                 .all(|b| b.filter_type == FilterType::Off)
         );
+    }
+
+    #[test]
+    fn profile_band_count_is_the_last_active_prefix() {
+        // The default set: 10 active bells, the tail Off -> profile 10.
+        assert_eq!(profile_band_count(&default_bands()), DEFAULT_ACTIVE_BANDS);
+        assert_eq!(
+            fader_band_count_for_profile(&default_bands()),
+            DEFAULT_ACTIVE_BANDS
+        );
+
+        // A band re-enabled deep in the tail extends the profile.
+        let mut bands = default_bands();
+        bands[19].filter_type = FilterType::Bell;
+        assert_eq!(profile_band_count(&bands), 20);
+        assert_eq!(fader_band_count_for_profile(&bands), 20);
+
+        // Trailing Off bands do not count; leading gaps do not hide anything.
+        bands[19].filter_type = FilterType::Off;
+        assert_eq!(profile_band_count(&bands), DEFAULT_ACTIVE_BANDS);
+    }
+
+    #[test]
+    fn fader_band_count_never_drops_below_one() {
+        // All Off / empty: upstream clamps the row to at least one fader.
+        assert_eq!(profile_band_count(&inactive_eq_bands()), 0);
+        assert_eq!(fader_band_count_for_profile(&inactive_eq_bands()), 1);
+        assert_eq!(fader_band_count_for_profile(&[]), 1);
+
+        // And never above MAX_BANDS: a longer slice is truncated by
+        // `profile_band_count`'s own `take(MAX_BANDS)`, so activating the
+        // last in-bounds band caps the count at 32.
+        let mut long = inactive_eq_bands();
+        long[MAX_BANDS - 1].filter_type = FilterType::Bell;
+        long.push(EqBand::new(MAX_BANDS));
+        assert_eq!(profile_band_count(&long), MAX_BANDS);
+        assert_eq!(fader_band_count_for_profile(&long), MAX_BANDS);
     }
 
     #[test]
