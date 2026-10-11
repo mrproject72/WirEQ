@@ -20,12 +20,17 @@ drag editing, exit reliability). Ranked next steps:
    and migrating every edit path risks the just-fixed behaviours for no
    further user-visible gain. Revisit only if a new bug lands in the
    fader/graph state sync.
-4. **Unit-test coverage for the backend** — PART 1 DONE 2026-10-11:
-   target_is_stale, peak_hold_step, and the Sin/Bell graph-label
-   regression guard are extracted and tested (141 tests). REMAINING:
-   `pipewire_backend.rs` (the pod wire format, the device-chain push) and
-   the deeper routing paths that need a live engine (the containerised
-   PipeWire smoke test below covers those).
+4. ~~**Unit-test coverage for the backend**~~ — DONE 2026-10-11.
+   Part 1: target_is_stale, peak_hold_step, and the Sin/Bell graph-label
+   regression guard are extracted and tested. Part 2 (commit `92091c9`):
+   the pod wire format is pinned by a round-trip test —
+   `build_props_controls_pod_bytes` ↔ `parse_props_controls_pod` with
+   exact f32 equality (the wire carries f32 per the upstream cast), the
+   112-control push-set contract at 10 active bands (preamp b0..a2 both
+   sides + per-band Freq/Q/Gain and mixer Gain 1/2 both sides), and the
+   bypass-neutrality push (every mixer dry, filters still addressed).
+   The deeper routing paths that need a live engine are covered by the
+   containerised PipeWire smoke test below and the gold path.
 5. **Flathub submission** — the rebrand is done (app ID
    `io.github.mrproject72.WirEQ`, the manifest/metainfo/icons renamed);
    the submission itself needs the Flathub repo setup + maintainer
