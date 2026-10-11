@@ -259,7 +259,7 @@ impl WirEqWindow {
             window_state::MIN_WINDOW_WIDTH,
             window_state::MIN_WINDOW_HEIGHT,
         );
-        window.set_title(Some("wireq RR"));
+        window.set_title(Some("WirEQ"));
 
         // Load CSS styling
         style::load_style();
@@ -286,8 +286,10 @@ impl WirEqWindow {
 
         // Build header bar
         let header_bar = adw::HeaderBar::new();
-        let window_title = adw::WindowTitle::new("wireq RR", "Rust Rewrite");
-        header_bar.set_title_widget(Some(&window_title));
+        // "no subtitles": a plain label as the title widget -- AdwWindowTitle
+        // always reserves the second line for its subtitle.
+        let window_title = gtk4::Label::new(Some("WirEQ"));
+        window_title.set_css_classes(&["title"]);
 
         // The output-device selector now lives in the Headroom panel's
         // "Output Controls" section (see window_utility.rs), not the header.
@@ -316,7 +318,7 @@ impl WirEqWindow {
             let win = window.clone();
             about_action.connect_activate(move |_, _| {
                 let about = adw::AboutDialog::new();
-                about.set_application_name("wireq RR");
+                about.set_application_name("WirEQ");
                 about.set_version(env!("CARGO_PKG_VERSION"));
                 about
                     .set_comments("Rust rewrite of wireq: system-wide parametric EQ for PipeWire.");
@@ -3484,7 +3486,7 @@ fn create_menu_model() -> gio::Menu {
     menu.append_section(None, &file_section);
 
     let help_section = gio::Menu::new();
-    help_section.append(Some("About wireq RR"), Some("win.about"));
+    help_section.append(Some("About WirEQ"), Some("win.about"));
     menu.append_section(None, &help_section);
 
     menu

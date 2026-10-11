@@ -111,7 +111,7 @@ fn main() {
         Ok(guard) => Some(guard),
         Err(wireq::instance::AcquireError::AlreadyRunning(pid)) => {
             eprintln!(
-                "wireq RR is already running{}. Use that window instead of starting a second one.",
+                "WirEQ is already running{}. Use that window instead of starting a second one.",
                 pid.map(|p| format!(" (pid {p})")).unwrap_or_default()
             );
             std::process::exit(1);
