@@ -20,10 +20,12 @@ drag editing, exit reliability). Ranked next steps:
    and migrating every edit path risks the just-fixed behaviours for no
    further user-visible gain. Revisit only if a new bug lands in the
    fader/graph state sync.
-4. **Unit-test coverage for the backend** — `pipewire_backend.rs` and
-   `routing.rs` have near-zero automated coverage; the routing edge cases
-   hit this week (stale targets, prefix-push semantics, scope rules) are
-   only protected by the gold path.
+4. **Unit-test coverage for the backend** — PART 1 DONE 2026-10-11:
+   target_is_stale, peak_hold_step, and the Sin/Bell graph-label
+   regression guard are extracted and tested (141 tests). REMAINING:
+   `pipewire_backend.rs` (the pod wire format, the device-chain push) and
+   the deeper routing paths that need a live engine (the containerised
+   PipeWire smoke test below covers those).
 5. **Flathub submission** under our own app ID; then the GNOME Shell
    extension from upstream.
 6. **AGENTS.md phase status refresh** — stale: it still says the graph
