@@ -561,24 +561,29 @@ impl MiniEqWindow {
         // Q. Edits land on the faders through the same owner-authoritative
         // paths a fader drag uses, so the peak clamp, the Smooth coupling and
         // the debounced DSP push all apply.
-        {
-            struct GraphDrag {
-                band_index: Option<usize>,
-                start_q: Option<f64>,
-                start_point: Option<(f64, f64)>,
-                edit_active: bool,
-            }
-            impl Default for GraphDrag {
-                fn default() -> Self {
-                    Self {
-                        band_index: None,
-                        start_q: None,
-                        start_point: None,
-                        edit_active: false,
-                    }
+        // The graph-drag state, hoisted so the 33 ms tick can see
+        // `edit_active`: while a graph drag is live the tick pushes the DSP
+        // payload immediately (33 ms cadence) instead of the 400 ms edit
+        // debounce -- the upstream 16 ms schedule_band_engine_update class.
+        struct GraphDrag {
+            band_index: Option<usize>,
+            start_q: Option<f64>,
+            start_point: Option<(f64, f64)>,
+            edit_active: bool,
+        }
+        impl Default for GraphDrag {
+            fn default() -> Self {
+                Self {
+                    band_index: None,
+                    start_q: None,
+                    start_point: None,
+                    edit_active: false,
                 }
             }
-            let drag_state: Rc<RefCell<GraphDrag>> = Rc::new(RefCell::new(GraphDrag::default()));
+        }
+        let graph_drag_state: Rc<RefCell<GraphDrag>> = Rc::new(RefCell::new(GraphDrag::default()));
+        {
+            let drag_state = graph_drag_state.clone();
             let registry = fader_registry.clone();
             let graph = utility.graph.clone();
             let headroom = utility.headroom.clone();
@@ -1424,6 +1429,7 @@ impl MiniEqWindow {
             // function scope for the switch handlers).
             let device_curve_memory_tick = device_curve_memory.clone();
             let graph_handle_for_focus = utility.graph.clone();
+            let graph_drag_state_tick = graph_drag_state.clone();
             let snapshot_device_curve_tick = snapshot_device_curve.clone();
             let restore_device_curve_tick = restore_device_curve.clone();
 
@@ -1797,8 +1803,18 @@ impl MiniEqWindow {
                 );
                 let payload_changed = payload_sig != *last_pushed_sig.borrow();
                 let bypass_changed = eq_enabled != *last_pushed_eq_enabled.borrow();
+                // While a drag is live (a graph dot or a fader being dragged)
+                // the payload pushes ride the 33 ms tick -- the upstream
+                // schedule_band_engine_update cadence (16 ms batching) -- so
+                // the curve follows the mouse instead of arriving up to
+                // 400 ms late. Outside a drag the 400 ms edit debounce
+                // stands, so scattered edits do not thrash the DSP.
+                let drag_now = graph_drag_state_tick.borrow().edit_active
+                    || band_faders.iter().any(|f| f.borrow().dragging_gain);
+                let push_interval = if drag_now { 33 } else { 400 };
                 let debounced_payload = payload_changed
-                    && last_push.borrow().elapsed() >= std::time::Duration::from_millis(400);
+                    && last_push.borrow().elapsed()
+                        >= std::time::Duration::from_millis(push_interval);
                 // Per-device EQ: the selected device's edits are the only band
                 // payload; every known chain still deserves a wet/bypass push
                 // when A/B changes. Anything pushed gets taken off the pending
