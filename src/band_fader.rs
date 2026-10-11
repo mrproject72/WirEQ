@@ -176,23 +176,19 @@ impl EqBandFader {
             drag.connect_begin(move |_gesture, _event_seq| {
                 let mut f = f1.borrow_mut();
                 f.drag_start_gain_db = f.gain_db;
-                // Upstream band_fader.py:549: a drag begins by selecting the
-                // band, so the editor and the graph follow the fader.
-                if !f.selected {
-                    if let Some(cb) = f.selection_changed_callback.clone() {
-                        let index = f.index;
-                        drop(f);
-                        cb(index);
-                        return;
-                    }
-                }
+                // Selection happens at the drag THRESHOLD crossing (see the
+                // drag-update handler), not here: selecting at press made a
+                // simple click toggle the band twice (press-select, then the
+                // release toggle deselect) -- the editor appeared and
+                // vanished in one gesture.
                 f.drawing_area.queue_draw();
             });
             drag.connect_drag_update(move |gesture, _offset_x, offset_y| {
                 // Snapshot what we need and RELEASE the borrow before asking
                 // the owner, which re-enters this fader.
-                let (index, cb, start_gain, height) = {
+                let (index, cb, select, start_gain, height, just_crossed) = {
                     let mut f = f2.borrow_mut();
+                    let mut crossed = false;
                     if !f.dragging_gain {
                         let start = gesture.start_point();
                         if start.is_none() {
@@ -207,14 +203,27 @@ impl EqBandFader {
                             return;
                         }
                         f.dragging_gain = true;
+                        crossed = true;
                     }
                     (
                         f.index,
                         f.gain_changed_callback.clone(),
+                        f.selection_changed_callback.clone(),
                         f.drag_start_gain_db,
                         f.drawing_area.allocated_height() as f64,
+                        crossed,
                     )
                 };
+                // Upstream band_fader.py:549: crossing the drag threshold
+                // selects the band, so the editor and the graph follow. A
+                // simple click never crosses, so the click's release toggle
+                // stays intact (and is suppressed here anyway by the
+                // dragged check above).
+                if just_crossed && !f2.borrow().selected {
+                    if let Some(select) = select.as_ref() {
+                        select(index);
+                    }
+                }
                 let state = gesture.current_event_state();
                 let multiplier = interaction_multiplier_for_state(state);
                 let (_track_top, track_bottom) = track_bounds(height);
