@@ -446,31 +446,46 @@ impl HeadroomPanel {
     /// So: live audio -> real dBFS. No monitor -> say plainly that the
     /// number is the curve's maximum boost, not a level.
     pub fn apply_live_peak(&mut self, live_dbfs: Option<f64>) {
-        match live_dbfs {
-            Some(db) if db.is_finite() => {
-                self.peak_label.set_label(&format!("{db:.1} dBFS"));
-                self.peak_label
-                    .set_tooltip_text(Some("Live output peak (dBFS)"));
+        // GTK invalidates a label even when set_label receives the identical
+        // string, and this runs at 10 Hz: only touch the widgets when the
+        // displayed value (or the LED class) actually moved.
+        let (text, tooltip, state) = match live_dbfs {
+            Some(db) if db.is_finite() => (
+                format!("{db:.1} dBFS"),
+                Some("Live output peak (dBFS)".to_string()),
                 // The LED goes live with the monitor: clipping is a property
                 // of the actual signal, so showing the curve's worst case
                 // while real audio is available would be the less honest
                 // choice. Thresholds mirror the Auto-Safe target.
-                self.led_state.set(if db > AUTO_SAFE_TARGET_DBFS {
+                if db > AUTO_SAFE_TARGET_DBFS {
                     HeadroomState::Risk
                 } else if db > AUTO_SAFE_TARGET_DBFS - 3.0 {
                     HeadroomState::Tight
                 } else {
                     HeadroomState::Safe
-                });
-            }
+                },
+            ),
             _ => {
                 let est = *self.peak_value.borrow();
-                self.peak_label.set_label(&format!("{est:+.1} dB"));
-                self.peak_label.set_tooltip_text(Some(
-                    "Maximum boost of the EQ curve — not a live level.\n\
-                     Turn on Monitor to see the real output peak.",
-                ));
+                (
+                    format!("{est:+.1} dB"),
+                    Some(
+                        "Maximum boost of the EQ curve — not a live level.\n\
+                         Turn on Monitor to see the real output peak."
+                            .to_string(),
+                    ),
+                    HeadroomState::Safe,
+                )
             }
+        };
+        if self.peak_label.text() != text {
+            self.peak_label.set_label(&text);
+            if let Some(tip) = tooltip {
+                self.peak_label.set_tooltip_text(Some(&tip));
+            }
+        }
+        if self.led_state.get() != state {
+            self.led_state.set(state);
         }
     }
 

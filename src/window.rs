@@ -1551,13 +1551,14 @@ impl MiniEqWindow {
                 // take_window_peak consumes, so the unconsumed windows make
                 // the displayed value a max over the gate period.
                 let peak_gated = peak_gate_tick % 3 != 0;
-                let live_peak = if peak_gated {
-                    None
+                let (live_peak, monitor_on) = if peak_gated {
+                    (None, true)
                 } else {
-                    backend
-                        .borrow()
-                        .as_ref()
-                        .and_then(|be| be.monitor_peak_dbfs())
+                    let be = backend.borrow();
+                    (
+                        be.as_ref().and_then(|be| be.monitor_peak_dbfs()),
+                        be.as_ref().is_some_and(|be| be.monitor_enabled()),
+                    )
                 };
 
                 // The live spectrum, read ONCE per tick and shared by the graph
@@ -1853,9 +1854,22 @@ impl MiniEqWindow {
                             // During the hold the frozen value is untouched.
                             headroom.borrow_mut().apply_live_peak(Some(peak_hold.get()));
                         }
+                        None if monitor_on => {
+                            // A silent window while the monitor is ENABLED:
+                            // never flip to the curve estimate -- the user's
+                            // "frantic change between 0 and other values"
+                            // (None = the quiet arm showing "+0.0 dB"). The
+                            // hold decays slowly toward the silence floor.
+                            let decayed = (peak_hold.get()
+                                - PEAK_HOLD_FALL_DB_PER_S * PEAK_HOLD_PERIOD_S)
+                                .max(-60.0);
+                            peak_hold.set(decayed);
+                            headroom.borrow_mut().apply_live_peak(Some(decayed));
+                        }
                         _ => {
-                            // The monitor is off: the curve-estimate display
-                            // takes over and the hold resets.
+                            // The monitor is genuinely off: the
+                            // curve-estimate display takes over and the hold
+                            // resets.
                             peak_hold.set(f64::NEG_INFINITY);
                             headroom.borrow_mut().apply_live_peak(live_peak);
                         }
