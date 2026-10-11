@@ -120,3 +120,18 @@ Building blocks already present in `routing.rs`: `find_node_id_by_name`,
   `io.github.mrproject72.mini_eq_rr` / `~/.config/mini-eq-rr`. Existing
   settings under the old `~/.config/mini-eq` are **not** picked up. If
   that matters, add a one-shot migration on first run.
+
+## Session 2026-10-11 follow-up (user-verified fixes)
+
+- **Peak chip flicker** — root cause: two writers to the peak label
+  (apply_live_peak at 10 Hz vs update_curve_peak's estimate every 33 ms
+  tick, different formats). Fixed: the live monitor peak owns the label
+  while active; the estimate only updates the internal value. Also the
+  dBFS display is now a peak-HOLD meter (1 s hold, 6 dB/s fall) at a
+  10 Hz update cadence (upstream emit parity).
+- **Ctrl+C / exit reliability** — the D-Bus teardown runs before the
+  window closes; the shutdown re-adoption is guarded.
+- **Stale targets from a killed instance** no longer hide streams from
+  the enable.
+- **The window minimum width** raised to 648 (the toolbar needs 644).
+- **The app icon** restored in the flatpak (explicit installs + cache).
