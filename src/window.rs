@@ -1,4 +1,4 @@
-//! Main application window for mini-eq.
+//! Main application window for wireq.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -229,7 +229,7 @@ fn resolve_monitor_target(be: &mut PipeWireBackend) -> String {
 }
 
 /// Main application window.
-pub struct MiniEqWindow {
+pub struct WirEqWindow {
     pub window: adw::ApplicationWindow,
     pub toolbar_view: adw::ToolbarView,
     pub utility: UtilityPane,
@@ -238,7 +238,7 @@ pub struct MiniEqWindow {
     pub band_faders: Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>,
 }
 
-impl MiniEqWindow {
+impl WirEqWindow {
     pub fn new(
         app: &adw::Application,
         backend: Rc<RefCell<Option<PipeWireBackend>>>,
@@ -259,7 +259,7 @@ impl MiniEqWindow {
             window_state::MIN_WINDOW_WIDTH,
             window_state::MIN_WINDOW_HEIGHT,
         );
-        window.set_title(Some("mini-eq RR"));
+        window.set_title(Some("wireq RR"));
 
         // Load CSS styling
         style::load_style();
@@ -286,7 +286,7 @@ impl MiniEqWindow {
 
         // Build header bar
         let header_bar = adw::HeaderBar::new();
-        let window_title = adw::WindowTitle::new("mini-eq RR", "Rust Rewrite");
+        let window_title = adw::WindowTitle::new("wireq RR", "Rust Rewrite");
         header_bar.set_title_widget(Some(&window_title));
 
         // The output-device selector now lives in the Headroom panel's
@@ -316,12 +316,11 @@ impl MiniEqWindow {
             let win = window.clone();
             about_action.connect_activate(move |_, _| {
                 let about = adw::AboutDialog::new();
-                about.set_application_name("mini-eq RR");
+                about.set_application_name("wireq RR");
                 about.set_version(env!("CARGO_PKG_VERSION"));
-                about.set_comments(
-                    "Rust rewrite of mini-eq: system-wide parametric EQ for PipeWire.",
-                );
-                about.set_website("https://github.com/mrproject72/mini-eq-RR");
+                about
+                    .set_comments("Rust rewrite of wireq: system-wide parametric EQ for PipeWire.");
+                about.set_website("https://github.com/mrproject72/WirEQ");
                 about.set_developers(&["mrproject72"]);
                 about.set_license_type(gtk4::License::Gpl30Only);
                 about.present(Some(&win));
@@ -2570,7 +2569,7 @@ impl MiniEqWindow {
 
         // --- Tear down routing BEFORE the backend goes away.
         // Without this, closing the window unloads the filter-chain module
-        // and destroys mini_eq_sink while every playback stream still has
+        // and destroys wireq_sink while every playback stream still has
         // target.node pointing at it. The audio then has nowhere to go and
         // the user hears silence until each app is restarted. This is the
         // "audio stops when I close the app" bug.
@@ -3168,7 +3167,7 @@ impl MiniEqWindow {
                     // `load_autoeq_entries` appends "autoeq/entries.json"
                     // itself, so this must be the *app* config dir. Passing
                     // `user_config_dir()` put the cache in `~/.config/autoeq/`
-                    // instead of `~/.config/mini-eq/autoeq/`.
+                    // instead of `~/.config/wireq/autoeq/`.
                     crate::core::app_config_dir(),
                 ));
 
@@ -3485,7 +3484,7 @@ fn create_menu_model() -> gio::Menu {
     menu.append_section(None, &file_section);
 
     let help_section = gio::Menu::new();
-    help_section.append(Some("About mini-eq RR"), Some("win.about"));
+    help_section.append(Some("About wireq RR"), Some("win.about"));
     menu.append_section(None, &help_section);
 
     menu

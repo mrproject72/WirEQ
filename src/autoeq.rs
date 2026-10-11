@@ -376,7 +376,7 @@ pub fn load_autoeq_entries(cache_dir: &Path) -> Result<Vec<AutoEqEntry>, String>
 
     let text = client
         .get(AUTOEQ_APP_ENTRIES_URL)
-        .header("User-Agent", "Mini EQ")
+        .header("User-Agent", "WirEQ")
         .send()
         .map_err(|e| format!("could not download AutoEq entries: {}", e))?
         .text()
@@ -741,7 +741,7 @@ mod tests {
     }
 
     fn tempfile_path(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join("mini-eq-test");
+        let dir = std::env::temp_dir().join("wireq-test");
         std::fs::create_dir_all(&dir).ok();
         dir.join(name)
     }

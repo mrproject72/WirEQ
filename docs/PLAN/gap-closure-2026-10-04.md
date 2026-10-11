@@ -1,6 +1,6 @@
 # Gap Closure Plan — 2026-10-04
 
-Source: source-level comparison of `mini-eq RR` (`main` @ `dd85b52`) against
+Source: source-level comparison of `wireq RR` (`main` @ `dd85b52`) against
 upstream `bhack/mini-eq` @ `upstream/main`, plus verification of the claims in
 `AGENTS.md`, `docs/BUGS.md` and `docs/PLAN/implementation-todo.md`.
 
@@ -58,7 +58,7 @@ Four independent defects stacked up behind it:
    called. Registering the object on a connection does not claim the
    well-known name, so every remote call got `ServiceUnknown`.
 2. **The handler was disconnected from the window.** `AppState` in `main.rs`
-   was the only `MiniEqAppHandler` impl and `window.rs` referenced it zero
+   was the only `WirEqAppHandler` impl and `window.rs` referenced it zero
    times. `SetEqEnabled`/`SetRoutingEnabled` flipped a `Mutex<bool>` nothing
    read; `SetPreset`, `PresentWindow` and `Quit` were empty bodies;
    `AnalyzerLevels` always returned `[]`. `GetState` reported
@@ -85,7 +85,7 @@ The GNOME Shell extension depends on this path, so it was blocked.
 - The window now mirrors state back into `AppState` (route switch, preset
   selection, bypass, per-tick analyzer/visibility), so `GetState` and the
   signals are live rather than a shadow copy.
-- `register()` now claims the bus name; `MiniEqDBusControl` retains the owner
+- `register()` now claims the bus name; `WirEqDBusControl` retains the owner
   id so the name is not dropped.
 - `build_state`'s hardcoded `running: false` replaced with a real
   `running()` (upstream: `controller is not None`).
@@ -143,7 +143,7 @@ Upstream `instance.py` (292 lines) does a validated absolute-path lock file
 whose parent is gone.
 
 For a PipeWire app this matters: a killed instance leaves an orphaned
-`filter-chain` node holding `mini_eq_sink`, and the next launch stacks a
+`filter-chain` node holding `wireq_sink`, and the next launch stacks a
 second one.
 
 ### Steps
@@ -187,13 +187,13 @@ a feedback loop. Blocked behind Gap 4's output-preset linking.
 
 ## Gap 7 — Packaging and assets (P1)
 
-- No Flatpak manifest (upstream `io.github.bhack.mini-eq.yaml`).
+- No Flatpak manifest (upstream `io.github.bhack.wireq.yaml`).
 - No GNOME Shell extension (blocked behind Gap 1).
 - **No app icons.** `desktop_integration.rs:14` points `APP_ICON_SEARCH_PATH`
   at `assets/icons`, but `src/assets` does not exist. `copy_app_icons` hits its
   `if !source_dir.exists() { return; }` and silently installs nothing while the
   generated `.desktop` file still declares `Icon=`.
-- `data/gnome-shell/extensions/io.github.bhack.mini-eq/` exists, is empty, and
+- `data/gnome-shell/extensions/io.github.bhack.wireq/` exists, is empty, and
   carries upstream's `bhack` app ID. Remove or repurpose.
 - No GSettings schema. Deliberate divergence — `settings.rs` uses a JSON file
   instead. Document it rather than porting it.
@@ -213,8 +213,8 @@ PipeWire smoke test; that stays the right answer.
 
 - Appearance preference never persisted: `settings.rs:156 save_appearance` and
   `appearance.rs:49 sync_appearance_css_class` both have zero call sites.
-- No config migration from `~/.config/mini-eq` to `~/.config/mini-eq-rr`.
-- `target/release/mini-eq` is from Sep 22, predating the Sep 28 work.
+- No config migration from `~/.config/wireq` to `~/.config/wireq`.
+- `target/release/wireq` is from Sep 22, predating the Sep 28 work.
 
 ---
 
@@ -235,13 +235,13 @@ PipeWire smoke test; that stays the right answer.
 ## Verification gate for every step
 
 ```bash
-export PKG_CONFIG_PATH="$HOME/code/mini-eq/deps/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="$HOME/code/wireq/deps/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test --lib
 ```
 
-Live audio checks need `pkill -x mini-eq` to stop (exact match — without `-x`
-it can match the invoking shell). Confirm `ps -o lstart -C mini-eq` against the
+Live audio checks need `pkill -x wireq` to stop (exact match — without `-x`
+it can match the invoking shell). Confirm `ps -o lstart -C wireq` against the
 binary mtime before retesting; stale-binary reports have already wasted a
 session once.

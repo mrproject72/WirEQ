@@ -6,7 +6,7 @@
 //!
 //! ## Why there is a command queue
 //!
-//! `MiniEqAppHandler` is bounded by `Send + Sync` because the `gio` vtable
+//! `WirEqAppHandler` is bounded by `Send + Sync` because the `gio` vtable
 //! closure that dispatches method calls requires it. GTK objects, however, are
 //! main-thread-only and cannot cross that boundary. So the handlers never touch
 //! the window directly: they update the cached state (so `GetState` answers
@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 
 use gtk4 as gtk;
 
-use crate::dbus_control::MiniEqAppHandler;
+use crate::dbus_control::WirEqAppHandler;
 
 /// A mutation requested over D-Bus, to be applied by the window.
 #[derive(Debug, Clone, PartialEq)]
@@ -157,7 +157,7 @@ impl AppState {
     /// Emit `StateChanged` if the bus connection is up.
     pub fn emit_state_changed(&self) {
         if let Some(conn) = self.connection() {
-            crate::dbus_control::MiniEqDBusControl::emit_state_changed(&conn, self);
+            crate::dbus_control::WirEqDBusControl::emit_state_changed(&conn, self);
         }
     }
 
@@ -178,14 +178,14 @@ impl AppState {
             *last = Some(now);
         }
         if let Some(conn) = self.connection() {
-            crate::dbus_control::MiniEqDBusControl::emit_analyzer_levels_changed(&conn, self);
+            crate::dbus_control::WirEqDBusControl::emit_analyzer_levels_changed(&conn, self);
         }
         true
     }
 
     pub fn emit_presets_changed(&self) {
         if let Some(conn) = self.connection() {
-            crate::dbus_control::MiniEqDBusControl::emit_presets_changed(&conn);
+            crate::dbus_control::WirEqDBusControl::emit_presets_changed(&conn);
         }
     }
 
@@ -256,7 +256,7 @@ impl AppState {
     }
 }
 
-impl MiniEqAppHandler for AppState {
+impl WirEqAppHandler for AppState {
     fn eq_enabled(&self) -> bool {
         *Self::lock(&self.eq_enabled)
     }

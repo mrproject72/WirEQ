@@ -1,8 +1,8 @@
-app-id: io.github.bhack.mini-eq
+app-id: io.github.bhack.wireq
 runtime: org.gnome.Platform
 runtime-version: '47'
 sdk: org.gnome.Sdk
-command: mini-eq
+command: wireq
 tags:
   - proprietary
 finish-args:
@@ -11,14 +11,14 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  - --filesystem=xdg-config/mini-eq
-  - --filesystem=xdg-cache/mini-eq
+  - --filesystem=xdg-config/wireq
+  - --filesystem=xdg-cache/wireq
   - --talk-name=org.freedesktop.Flatpak
   - --socket=pipewire
   - --socket=pulseaudio
 
 modules:
-  - name: mini-eq
+  - name: wireq
     buildsystem: cargo
     sources:
       - type: dir

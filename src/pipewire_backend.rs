@@ -265,7 +265,7 @@ impl PipeWireBackend {
             }
             // Per-device chains: capture the live node proxy for whichever
             // chain owns this virtual sink name (all of ours start with the
-            // legacy `mini_eq_sink` prefix).
+            // legacy `wireq_sink` prefix).
             let name = global
                 .props
                 .as_ref()
@@ -602,7 +602,7 @@ impl PipeWireBackend {
         }
         // The chain's PHYSICAL output, not `current_sink`: that follows the
         // virtual sink while routing is on, which used to send the monitor to
-        // `mini_eq_sink` itself instead of the equalised device.
+        // `wireq_sink` itself instead of the equalised device.
         let current = self.routing.chain_output_sink().unwrap_or_default();
         if !current.is_empty() {
             return current;

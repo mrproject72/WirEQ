@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarise the PipeWire graph state relevant to mini-eq live tests.
+"""Summarise the PipeWire graph state relevant to wireq live tests.
 
 Stream routing targets set via the `default` metadata do NOT appear in node
 props in pw-dump; they are read from the Metadata object's entries
@@ -57,7 +57,7 @@ def main() -> int:
 
     sinks = {}
     for nid, (name, serial, props) in nodes.items():
-        if props.get("media.class") == "Audio/Sink" and "mini_eq" not in name:
+        if props.get("media.class") == "Audio/Sink" and "wireq" not in name:
             sinks[name] = {"id": nid, "serial": serial}
 
     minieq = None
@@ -68,21 +68,21 @@ def main() -> int:
                 minieq = {"id": nid, "serial": serial, "name": name}
     if minieq is None:
         for nid, (name, serial, _props) in nodes.items():
-            if name.startswith("mini_eq_sink"):
+            if name.startswith("wireq_sink"):
                 minieq = {"id": nid, "serial": serial, "name": name}
                 break
     # Multi-chain: every device EQ sink visible, keyed by node name.
     eq_sinks = {
         name: {"id": nid, "serial": serial, "name": name}
         for nid, (name, serial, _props) in nodes.items()
-        if name.startswith("mini_eq_sink")
+        if name.startswith("wireq_sink")
     }
     if env_default_eq := __import__("os").environ.get("PW_STATE_DEFAULT_EQ"):
         minieq = eq_sinks.get(env_default_eq, minieq)
 
     filter_output = None
     for nid, (name, _serial, _props) in nodes.items():
-        if name == "mini_eq_sink_output":
+        if name == "wireq_sink_output":
             tgt = targets.get(nid, {})
             filter_output = {"id": nid, "target_object": tgt.get("target.object", "")}
 
@@ -102,7 +102,7 @@ def main() -> int:
 
     analyzer = None
     for nid, (name, _serial, _props) in nodes.items():
-        if name == "mini-eq-analyzer" or "analyzer" in name.lower():
+        if name == "wireq-analyzer" or "analyzer" in name.lower():
             analyzer = {"id": nid, "name": name}
             break
 

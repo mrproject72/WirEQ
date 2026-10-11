@@ -1,8 +1,8 @@
-//! D-Bus remote control interface for Mini EQ.
+//! D-Bus remote control interface for WirEQ.
 //!
 //! Mirrors `dbus_control.py` from the original Python project. Registers a
-//! D-Bus service at `io.github.mrproject72.mini_eq_rr` / `/io/github/mrproject72/mini_eq_rr/Control`
-//! with the `io.github.mrproject72.MiniEqRR.Control` interface.
+//! D-Bus service at `io.github.mrproject72.WirEQ` / `/io/github/mrproject72/WirEQ/Control`
+//! with the `io.github.mrproject72.WirEQ.Control` interface.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,8 +18,8 @@ use crate::window_presets::list_preset_names;
 // ── Constants ────────────────────────────────────────────────────────
 
 pub const BUS_NAME: &str = APP_ID;
-pub const OBJECT_PATH: &str = "/io/github/mrproject72/mini_eq_rr/Control";
-pub const INTERFACE_NAME: &str = "io.github.mrproject72.MiniEqRR.Control";
+pub const OBJECT_PATH: &str = "/io/github/mrproject72/WirEQ/Control";
+pub const INTERFACE_NAME: &str = "io.github.mrproject72.WirEQ.Control";
 pub const PANEL_ANALYZER_BINS: usize = 10;
 pub const API_VERSION: u32 = 1;
 
@@ -45,7 +45,7 @@ pub const CAPABILITIES: &[&str] = &[
 // ── D-Bus introspection XML ─────────────────────────────────────────
 
 pub const INTROSPECTION_XML: &str = r#"<node>
-  <interface name="io.github.mrproject72.MiniEqRR.Control">
+  <interface name="io.github.mrproject72.WirEQ.Control">
     <method name="GetState">
       <arg name="state" type="a{sv}" direction="out"/>
     </method>
@@ -93,7 +93,7 @@ pub const INTROSPECTION_XML: &str = r#"<node>
 
 /// Trait representing the application state that the D-Bus interface can query
 /// and control. Mirrors the Python protocols.
-pub trait MiniEqAppHandler: Send + Sync + 'static {
+pub trait WirEqAppHandler: Send + Sync + 'static {
     /// Whether the EQ engine (upstream: the controller) exists. Upstream
     /// reports `controller is not None`.
     fn running(&self) -> bool {
@@ -175,7 +175,7 @@ pub trait MiniEqAppHandler: Send + Sync + 'static {
 // ── State building ──────────────────────────────────────────────────
 
 /// Build the state dictionary returned by `GetState`.
-pub fn build_state(handler: &dyn MiniEqAppHandler) -> HashMap<String, glib::Variant> {
+pub fn build_state(handler: &dyn WirEqAppHandler) -> HashMap<String, glib::Variant> {
     let mut state = HashMap::new();
     state.insert("api_version".to_string(), glib::Variant::from(API_VERSION));
     state.insert(
@@ -297,9 +297,9 @@ pub fn clamp_level(level: f64) -> f64 {
 
 // ── D-Bus Control ───────────────────────────────────────────────────
 
-/// D-Bus control object that registers the Mini EQ D-Bus interface.
-pub struct MiniEqDBusControl {
-    handler: Arc<dyn MiniEqAppHandler>,
+/// D-Bus control object that registers the WirEQ D-Bus interface.
+pub struct WirEqDBusControl {
+    handler: Arc<dyn WirEqAppHandler>,
     connection: Arc<Mutex<Option<gio::DBusConnection>>>,
     registration_id: Arc<Mutex<Option<gio::RegistrationId>>>,
     /// Owner id for the well-known bus name. Must be retained for as long as
@@ -308,8 +308,8 @@ pub struct MiniEqDBusControl {
     bus_owner_id: Arc<Mutex<Option<u32>>>,
 }
 
-impl MiniEqDBusControl {
-    pub fn new(handler: Arc<dyn MiniEqAppHandler>) -> Self {
+impl WirEqDBusControl {
+    pub fn new(handler: Arc<dyn WirEqAppHandler>) -> Self {
         Self {
             handler,
             connection: Arc::new(Mutex::new(None)),
@@ -416,7 +416,7 @@ impl MiniEqDBusControl {
         method: &str,
         params: &glib::Variant,
         invocation: gio::DBusMethodInvocation,
-        handler: &dyn MiniEqAppHandler,
+        handler: &dyn WirEqAppHandler,
         connection: &Arc<Mutex<Option<gio::DBusConnection>>>,
     ) {
         let conn = connection.lock().unwrap().clone();
@@ -569,7 +569,7 @@ impl MiniEqDBusControl {
     /// see UI-initiated changes too.
     pub(crate) fn emit_state_changed(
         connection: &gio::DBusConnection,
-        handler: &dyn MiniEqAppHandler,
+        handler: &dyn WirEqAppHandler,
     ) {
         let state = build_state(handler);
         let variant = state_to_variant(&state);
@@ -586,7 +586,7 @@ impl MiniEqDBusControl {
     #[allow(dead_code)]
     pub(crate) fn emit_analyzer_levels_changed(
         connection: &gio::DBusConnection,
-        handler: &dyn MiniEqAppHandler,
+        handler: &dyn WirEqAppHandler,
     ) {
         let levels = panel_analyzer_levels(
             &handler.analyzer_levels(),
@@ -617,7 +617,7 @@ impl MiniEqDBusControl {
     }
 }
 
-/// Send a D-Bus `PresentWindow` method call to a running Mini EQ instance.
+/// Send a D-Bus `PresentWindow` method call to a running WirEQ instance.
 pub fn call_present_window(startup_id: Option<&str>, timeout_ms: i32) -> Result<(), String> {
     let connection = gio::bus_get_sync(gio::BusType::Session, None::<&gio::Cancellable>)
         .map_err(|e| format!("Failed to get session bus: {}", e))?;

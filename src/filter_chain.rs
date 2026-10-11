@@ -1,6 +1,6 @@
 //! PipeWire filter-chain graph construction.
 //!
-//! Port of upstream `mini_eq/filter_chain.py`. The graph is described as a
+//! Port of upstream `wireq/filter_chain.py`. The graph is described as a
 //! PipeWire module argument string and loaded with
 //! `pw_context_load_module("libpipewire-module-filter-chain", args)`; it is not
 //! a `create_object` factory.
@@ -474,8 +474,8 @@ mod tests {
             &bands,
             0.0,
             true,
-            "mini_eq_sink",
-            "mini_eq_sink_output",
+            "wireq_sink",
+            "wireq_sink_output",
             "alsa_output.test",
             true,
         );
@@ -486,7 +486,7 @@ mod tests {
             "HiShelf label missing"
         );
         assert!(args.contains("name = band_l_0_filter"));
-        assert!(args.contains("node.name = \"mini_eq_sink\""));
+        assert!(args.contains("node.name = \"wireq_sink\""));
         assert!(args.contains("target.object = \"alsa_output.test\""));
         // Native biquads must not pin the graph to 48 kHz.
         assert!(!args.contains("audio.rate"));
@@ -499,8 +499,8 @@ mod tests {
             &bands,
             0.0,
             true,
-            "mini_eq_sink",
-            "mini_eq_sink_output",
+            "wireq_sink",
+            "wireq_sink_output",
             "alsa_output.test",
             true,
         );

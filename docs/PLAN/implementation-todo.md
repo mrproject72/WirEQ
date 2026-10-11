@@ -1,4 +1,4 @@
-# Implementation TODO — mini-eq Rust Port
+# Implementation TODO — wireq Rust Port
 
 ## Blocker: Backend Parity (Phase 1)
 
@@ -68,13 +68,13 @@
 
 ## Flatpak / Packaging (Phase 8)
 
-- [ ] Create Flatpak manifest `io.github.mrproject72.mini_eq_rr.yaml` matching upstream.
+- [ ] Create Flatpak manifest `io.github.mrproject72.WirEQ.yaml` matching upstream.
 - [ ] Add Flatpak build/test workflow.
 - [ ] Verify appstream metadata, desktop file, icon installation.
 
 ## GNOME Shell Extension (Phase 8)
 
-- [ ] Port `extensions/gnome-shell/mini-eq@bhack.github.io/extension.js` to match upstream.
+- [ ] Port `extensions/gnome-shell/wireq@bhack.github.io/extension.js` to match upstream.
 - [ ] Add metadata.json, SVG icon, README.
 
 ## CI / Runtime Validation (Phase 8)

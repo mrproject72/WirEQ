@@ -1,4 +1,4 @@
-//! CSS styling for the mini-eq GTK4 application.
+//! CSS styling for the wireq GTK4 application.
 
 use gtk4::CssProvider;
 use gtk4::gdk;
@@ -23,14 +23,14 @@ const STYLE_CSS: &str = r#"
     --mini-text-dim: rgb(150, 151, 155);
 }
 
-.mini-eq-dark {
+.wireq-dark {
     --window-fg-color: rgb(235, 236, 237);
     --window-bg-color: rgb(30, 30, 32);
     --panel-bg-color: rgb(40, 41, 44);
     --panel-border-color: rgb(60, 61, 65);
 }
 
-.mini-eq-light {
+.wireq-light {
     --window-fg-color: rgb(40, 40, 42);
     --window-bg-color: rgb(240, 241, 243);
     --panel-bg-color: rgb(255, 255, 255);
@@ -332,7 +332,7 @@ menubutton.smooth-on button {
 }
 "#;
 
-/// Load the mini-eq CSS stylesheet into the GTK default display.
+/// Load the wireq CSS stylesheet into the GTK default display.
 pub fn load_style() {
     let provider = CssProvider::new();
     provider.load_from_data(STYLE_CSS);

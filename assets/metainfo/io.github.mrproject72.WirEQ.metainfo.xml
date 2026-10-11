@@ -49,17 +49,17 @@
     <binary>wireq</binary>
   </provides>
 
-  <url type="homepage">https://github.com/mrproject72/mini-eq-RR</url>
+  <url type="homepage">https://github.com/mrproject72/WirEQ</url>
   <developer id="io.github.mrproject72"><name>mrproject72</name></developer>
 
   <content_rating type="oars-1.1"/>
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/mrproject72/mini-eq-RR/main/screenshot/Screenshot%20From%202026-09-18%2021-27-35.png</image>
+      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/Screenshot%20From%202026-09-18%2021-27-35.png</image>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/mrproject72/mini-eq-RR/main/screenshot/Screenshot%20From%202026-09-18%2021-29-43.png</image>
+      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/Screenshot%20From%202026-09-18%2021-29-43.png</image>
     </screenshot>
   </screenshots>
 

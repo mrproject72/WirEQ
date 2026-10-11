@@ -30,11 +30,11 @@ FLATPAK=0
 [ "${1:-}" = "--flatpak" ] && FLATPAK=1
 DBUS="python3 tests-live/dbus.py"
 if [ "$FLATPAK" = 1 ]; then
-  APP_ID=io.github.mrproject72.mini_eq_rr
+  APP_ID=io.github.mrproject72.WirEQ
   start_app() { setsid nohup flatpak run --env=RUST_LOG=info "$APP_ID" >"$1" 2>&1 < /dev/null & disown; }
   kill_app() { flatpak kill "$APP_ID" >/dev/null 2>&1; kill "$APP_PID" 2>/dev/null; }
 else
-  start_app() { setsid nohup env RUST_LOG=debug ./target/release/mini-eq-rr >"$1" 2>&1 < /dev/null & disown; }
+  start_app() { setsid nohup env RUST_LOG=debug ./target/release/wireq >"$1" 2>&1 < /dev/null & disown; }
   kill_app() { kill "$APP_PID" 2>/dev/null; }
 fi
 DEV_A="alsa_output.pci-0000_04_00.6.analog-stereo"
@@ -42,8 +42,8 @@ DEV_B="alsa_output.usb-Logitech_Inc_Logitech_H570e_Stereo_00000000-00.analog-ste
 SCRATCH=tmp/twodev_gold
 mkdir -p "$SCRATCH"
 TONE="$SCRATCH/tone_1k.wav"
-PRESET_DIR="$HOME/.config/mini-eq/output"
-LINKS_FILE="$HOME/.config/mini-eq/output-presets.json"
+PRESET_DIR="$HOME/.config/wireq/output"
+LINKS_FILE="$HOME/.config/wireq/output-presets.json"
 LINKS_BAK="$SCRATCH/output-presets.json.bak"
 PASS=0; FAIL=0; FAILED_NAMES=()
 PID_A=""; PID_B=""; APP_PID=""
@@ -51,7 +51,7 @@ PID_A=""; PID_B=""; APP_PID=""
 for tool in pw-play pw-dump pw-record python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "missing tool: $tool"; exit 99; }
 done
-[ "$FLATPAK" = 1 ] || { [ -x ./target/release/mini-eq-rr ] || { cargo build --release || exit 99; }; }
+[ "$FLATPAK" = 1 ] || { [ -x ./target/release/wireq ] || { cargo build --release || exit 99; }; }
 
 cleanup() {
   if kill -0 "$APP_PID" 2>/dev/null; then
@@ -77,9 +77,9 @@ check() {
 }
 
 state_val() {
-  gdbus call --session --dest io.github.mrproject72.mini_eq_rr \
-    --object-path /io/github/mrproject72/mini_eq_rr/Control \
-    --method io.github.mrproject72.MiniEqRR.Control.GetState 2>/dev/null \
+  gdbus call --session --dest io.github.mrproject72.WirEQ \
+    --object-path /io/github/mrproject72/WirEQ/Control \
+    --method io.github.mrproject72.WirEQ.Control.GetState 2>/dev/null \
     | grep "^$1=" | cut -d= -f2-
 }
 # NOTE: through dbus.py, booleans need the b: prefix (bare args are parsed
@@ -90,7 +90,7 @@ eq_out_for() {
   python3 -c "
 import re, sys
 s = re.sub(r'[^A-Za-z0-9_.-]', '_', sys.argv[1]).strip('_.-')
-print('mini_eq_sink_' + s + '_output')" "$1"
+print('wireq_sink_' + s + '_output')" "$1"
 }
 
 stream_links() {
@@ -121,9 +121,9 @@ print('%.1f' % math.sqrt(sum(x * x for x in s) / len(s)))"
 }
 
 # --- 0. precondition: no instance running ------------------------------------
-if gdbus call --session --dest io.github.mrproject72.mini_eq_rr --object-path /io/github/mrproject72/mini_eq_rr/Control \
-     --method io.github.mrproject72.MiniEqRR.Control.GetState >/dev/null 2>&1; then
-  echo "ABORT: a mini-eq instance is already running (kill it by PID first)"; exit 99
+if gdbus call --session --dest io.github.mrproject72.WirEQ --object-path /io/github/mrproject72/WirEQ/Control \
+     --method io.github.mrproject72.WirEQ.Control.GetState >/dev/null 2>&1; then
+  echo "ABORT: a wireq instance is already running (kill it by PID first)"; exit 99
 fi
 
 # --- 1. presets seeded BEFORE app launch (SetPreset only finds startup-scan
@@ -232,7 +232,7 @@ echo "  links after quit: $LINKS_AFTER"
 check "step 6a: both streams back on their devices (not pathless/EQ)" python3 -c "
 s = '''$LINKS_AFTER'''
 assert s != 'NO-LINKS', 'streams pathless after quit'
-assert 'mini_eq_sink' not in s, f'still linked into EQ after quit: {s}'"
+assert 'wireq_sink' not in s, f'still linked into EQ after quit: {s}'"
 # The shutdown re-adoption: the exit restore changes every stream's target,
 # flagging them dirty; if the tick re-adopts them into the dying chains the
 # streams bounce one last time (the shutdown disconnect). The links above

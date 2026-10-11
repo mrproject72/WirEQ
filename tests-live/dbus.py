@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Call the mini-eq D-Bus API and print results as plain KEY=VALUE lines.
+"""Call the wireq D-Bus API and print results as plain KEY=VALUE lines.
 
 Usage:
   dbus.py getstate            -> KEY=VALUE per line (strings unquoted)
@@ -8,9 +8,9 @@ Usage:
 import subprocess
 import sys
 
-BUS = "io.github.mrproject72.mini_eq_rr"
-OBJ = "/io/github/mrproject72/mini_eq_rr/Control"
-IFACE = "io.github.mrproject72.MiniEqRR.Control"
+BUS = "io.github.mrproject72.WirEQ"
+OBJ = "/io/github/mrproject72/WirEQ/Control"
+IFACE = "io.github.mrproject72.WirEQ.Control"
 
 
 def call(method, args):

@@ -86,7 +86,7 @@ struct MonitorProcessor {
 
 /// Captures audio from the processed output and performs FFT spectrum
 /// analysis. Port of the Python `OutputSpectrumAnalyzer`: the stream
-/// mirrors upstream's `mini-eq-analyzer` capture (F32 stereo, monitor of
+/// mirrors upstream's `wireq-analyzer` capture (F32 stereo, monitor of
 /// the output sink), buffers feed the log-band FFT + LUFS meter, and the
 /// UI reads snapshots via [`OutputSpectrumAnalyzer::display_levels`].
 pub struct OutputSpectrumAnalyzer {
@@ -302,7 +302,7 @@ impl OutputSpectrumAnalyzer {
     }
 
     /// Start capturing the processed output sink, mirroring upstream's
-    /// `mini-eq-analyzer` stream. Must be called on the loop's thread
+    /// `wireq-analyzer` stream. Must be called on the loop's thread
     /// before the loop moves to a background thread. `target_node_id`
     /// pins capture to the sink's monitor ports (like upstream's
     /// `new_audio_capture(sink, monitor=true)`); without it the session
@@ -326,7 +326,7 @@ impl OutputSpectrumAnalyzer {
             *pipewire::keys::MEDIA_ROLE => "Music",
             *pipewire::keys::NODE_NAME => ANALYZER_NODE_NAME,
             *pipewire::keys::NODE_DESCRIPTION => ANALYZER_NODE_DESCRIPTION,
-            *pipewire::keys::APP_NAME => "Mini EQ",
+            *pipewire::keys::APP_NAME => "WirEQ",
             "application.id" => ANALYZER_APPLICATION_ID,
             "media.name" => ANALYZER_NODE_DESCRIPTION,
             *pipewire::keys::MEDIA_CLASS => "Stream/Input/Audio",
@@ -725,9 +725,9 @@ pub const ANALYZER_DISPLAY_GAIN_MIN: f64 = -12.0;
 pub const ANALYZER_DISPLAY_GAIN_MAX: f64 = 32.0;
 pub const ANALYZER_DISPLAY_GAIN_DEFAULT: f64 = 0.0;
 pub const ANALYZER_CAPTURE_QUEUE_BLOCKS: usize = 128;
-pub const ANALYZER_NODE_NAME: &str = "mini-eq-analyzer";
-pub const ANALYZER_NODE_DESCRIPTION: &str = "Mini EQ Monitor";
-pub const ANALYZER_APPLICATION_ID: &str = "io.github.mrproject72.mini_eq_rr";
+pub const ANALYZER_NODE_NAME: &str = "wireq-analyzer";
+pub const ANALYZER_NODE_DESCRIPTION: &str = "WirEQ Monitor";
+pub const ANALYZER_APPLICATION_ID: &str = "io.github.mrproject72.WirEQ";
 pub const ANALYZER_MEDIA_CLASS: &str = "Stream/Input/Audio/Internal";
 
 pub const ANALYZER_RESPONSE_MIN: f64 = 0.02;

@@ -48,12 +48,12 @@ Ubuntu-only):
    unit tests; `pipewire_backend.rs` and `routing.rs` have zero automated
    coverage and are only verified on a dev machine. PipeWire can run in a
    container against a dummy/null sink, which would let CI:
-   - create the filter-chain and assert `mini_eq_sink` appears
+   - create the filter-chain and assert `wireq_sink` appears
    - exercise route/unroute and assert streams are handed back to the
      default output (regression test for the "audio stops when the app
      closes" bug)
    - confirm biquad coefficients actually reach the node
-2. ~~**Flatpak build job**~~ — DONE 2026-10-06: `io.github.mrproject72.mini_eq_rr.yml`
+2. ~~**Flatpak build job**~~ — DONE 2026-10-06: `io.github.mrproject72.WirEQ.yml`
    + `flatpak` job in `ci.yml`; appstream/desktop validated.
 3. **Fedora** (`fedora:latest`) — largest PipeWire + GNOME desktop overlap;
    exercises the RPM dependency path.
@@ -101,7 +101,7 @@ discipline. Needs:
 
 The monitor now follows a system default-output change, but the
 filter-chain's own output does not. Implementing it means removing the
-existing `mini_eq_sink_output -> old_sink` link and creating a new one.
+existing `wireq_sink_output -> old_sink` link and creating a new one.
 
 Do NOT ship this without testing on real hardware: a wrong link produces
 either silence or a feedback loop. Needs a machine with at least two
@@ -119,8 +119,8 @@ Building blocks already present in `routing.rs`: `find_node_id_by_name`,
 - **Fader bottom residual clip** at some window sizes (see Known Issues).
 - **Flatpak packaging** and **GNOME Shell extension**.
 - **Config migration** — the app ID and config directory were renamed to
-  `io.github.mrproject72.mini_eq_rr` / `~/.config/mini-eq-rr`. Existing
-  settings under the old `~/.config/mini-eq` are **not** picked up. If
+  `io.github.mrproject72.WirEQ` / `~/.config/wireq`. Existing
+  settings under the old `~/.config/wireq` are **not** picked up. If
   that matters, add a one-shot migration on first run.
 
 ## Session 2026-10-11 follow-up (user-verified fixes)

@@ -1,4 +1,4 @@
-//! Mini EQ — main entry point.
+//! WirEQ — main entry point.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,13 +7,13 @@ use adw::prelude::*;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use mini_eq_rr::core::default_bands;
-use mini_eq_rr::dbus_control::MiniEqDBusControl;
-use mini_eq_rr::pipewire_backend::PipeWireBackend;
-use mini_eq_rr::remote_control::AppState;
+use wireq::core::default_bands;
+use wireq::dbus_control::WirEqDBusControl;
+use wireq::pipewire_backend::PipeWireBackend;
+use wireq::remote_control::AppState;
 
 #[derive(Parser)]
-#[command(name = "mini-eq")]
+#[command(name = "wireq")]
 #[command(about = "Compact PipeWire system-wide parametric equalizer")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
@@ -52,7 +52,7 @@ enum Commands {
 }
 
 /// Shared application state for the D-Bus handler lives in
-/// `mini_eq_rr::remote_control::AppState` — the window has to write into it on
+/// `wireq::remote_control::AppState` — the window has to write into it on
 /// every state mutation, so it cannot live in this binary crate.
 // (see `AppState` there for the command queue that bridges the `Send` D-Bus
 // vtable to the main-thread GTK objects)
@@ -83,7 +83,7 @@ fn main() {
     if let Some(command) = &cli.command {
         match command {
             Commands::InstallDesktop => {
-                match mini_eq_rr::desktop_integration::install_desktop_integration() {
+                match wireq::desktop_integration::install_desktop_integration() {
                     Ok(()) => println!("Installed desktop launcher and app icons."),
                     Err(e) => {
                         eprintln!("Failed to install desktop integration: {e}");
@@ -105,13 +105,13 @@ fn main() {
     }
 
     // Single-instance guard. Two instances would both try to own
-    // `mini_eq_sink`, so the second must not start. The kernel drops the lock
+    // `wireq_sink`, so the second must not start. The kernel drops the lock
     // if we die, so a crash never leaves the app unlaunchable.
-    let _instance_guard = match mini_eq_rr::instance::InstanceGuard::try_acquire() {
+    let _instance_guard = match wireq::instance::InstanceGuard::try_acquire() {
         Ok(guard) => Some(guard),
-        Err(mini_eq_rr::instance::AcquireError::AlreadyRunning(pid)) => {
+        Err(wireq::instance::AcquireError::AlreadyRunning(pid)) => {
             eprintln!(
-                "mini-eq RR is already running{}. Use that window instead of starting a second one.",
+                "wireq RR is already running{}. Use that window instead of starting a second one.",
                 pid.map(|p| format!(" (pid {p})")).unwrap_or_default()
             );
             std::process::exit(1);
@@ -135,8 +135,8 @@ fn main() {
 }
 
 fn print_dependency_report() {
-    println!("Mini EQ dependency check");
-    println!("  [OK] mini-eq v{}", env!("CARGO_PKG_VERSION"));
+    println!("WirEQ dependency check");
+    println!("  [OK] wireq v{}", env!("CARGO_PKG_VERSION"));
     println!("  [OK] GTK4 / Libadwaita (linked at build time)");
 
     let module = std::path::Path::new(
@@ -167,7 +167,7 @@ fn print_dependency_report() {
 fn run_headless(duration: Option<u64>, import_apo: Option<&std::path::Path>) {
     println!("Running headless (no GUI)");
     let bands = match import_apo {
-        Some(path) => match mini_eq_rr::autoeq::parse_apo_file(path) {
+        Some(path) => match wireq::autoeq::parse_apo_file(path) {
             Ok((preamp, bands)) => {
                 println!(
                     "Imported APO preset: {} band(s), preamp {:.1} dB",
@@ -225,7 +225,7 @@ fn run_headless(duration: Option<u64>, import_apo: Option<&std::path::Path>) {
 fn launch_gui(_background_mode: bool, auto_route: bool, output_sink: Option<String>) {
     let _ = adw::init();
     let app = adw::Application::new(
-        Some("io.github.mrproject72.mini_eq_rr"),
+        Some("io.github.mrproject72.WirEQ"),
         adw::gio::ApplicationFlags::empty(),
     );
 
@@ -265,14 +265,13 @@ fn launch_gui(_background_mode: bool, auto_route: bool, output_sink: Option<Stri
                         engine_sink = sink.clone();
                         // Honor the device's configured preset immediately, the
                         // same rule the per-device ON handler uses at EQ start.
-                        let (bands, preamp) = match mini_eq_rr::core::output_preset_for_sink(&sink)
-                        {
-                            Some(name) => mini_eq_rr::core::load_preset_from_file(
-                                &mini_eq_rr::core::preset_path_for_name(&name),
+                        let (bands, preamp) = match wireq::core::output_preset_for_sink(&sink) {
+                            Some(name) => wireq::core::load_preset_from_file(
+                                &wireq::core::preset_path_for_name(&name),
                             )
                             .map(|(p, b)| (b, p))
-                            .unwrap_or_else(|_| (mini_eq_rr::core::default_bands(), 0.0)),
-                            None => (mini_eq_rr::core::default_bands(), 0.0),
+                            .unwrap_or_else(|_| (wireq::core::default_bands(), 0.0)),
+                            None => (wireq::core::default_bands(), 0.0),
                         };
                         match backend.ensure_device_chain(&sink, bands) {
                             Ok(_) => {
@@ -283,7 +282,7 @@ fn launch_gui(_background_mode: bool, auto_route: bool, output_sink: Option<Stri
                             Err(e) => log::warn!("Failed to load filter chain: {}", e),
                         }
                         if auto_route {
-                            let eq = mini_eq_rr::core::eq_virtual_sink_for(&sink);
+                            let eq = wireq::core::eq_virtual_sink_for(&sink);
                             match backend.auto_route_to_sink(&eq) {
                                 Ok(()) => {
                                     backend.set_device_eq_enabled(&sink, true);
@@ -309,9 +308,9 @@ fn launch_gui(_background_mode: bool, auto_route: bool, output_sink: Option<Stri
     }
     // Catch SIGTERM/SIGINT so a `kill` or a session-manager stop still runs the
     // routing restore. The update loop turns the flag into a clean quit.
-    mini_eq_rr::exit_guard::install_signal_handlers();
+    wireq::exit_guard::install_signal_handlers();
 
-    let dbus_control = std::sync::Arc::new(MiniEqDBusControl::new(app_state.clone()));
+    let dbus_control = std::sync::Arc::new(WirEqDBusControl::new(app_state.clone()));
     if let Err(e) = dbus_control.register() {
         log::warn!("Failed to register D-Bus control: {}", e);
     }
@@ -339,7 +338,7 @@ fn launch_gui(_background_mode: bool, auto_route: bool, output_sink: Option<Stri
     let sink_for_activate = engine_sink.clone();
     let state_for_activate = app_state.clone();
     app.connect_activate(move |app| {
-        let window = mini_eq_rr::window::MiniEqWindow::new(
+        let window = wireq::window::WirEqWindow::new(
             app,
             backend_for_activate.clone(),
             sink_for_activate.clone(),
@@ -354,7 +353,7 @@ fn launch_gui(_background_mode: bool, auto_route: bool, output_sink: Option<Stri
     // application `shutdown` signal also fires on last-window-closed and any
     // other path that ends the main loop. This matters because the stream
     // targets live in PipeWire's shared `default` metadata: if the app dies
-    // with playback streams still pointed at mini_eq_sink, those values
+    // with playback streams still pointed at wireq_sink, those values
     // outlive the app, the sink gets destroyed with the filter-chain, and
     // every player goes silent -- the "audio stops when I close the app"
     // bug. Unrouting hands the streams back to the real default output.

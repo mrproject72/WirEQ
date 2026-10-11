@@ -1,14 +1,16 @@
-# mini-eq RR (Rust Rewrite)
+# WirEQ
 
 Compact PipeWire system-wide parametric equalizer for Linux desktops.
 
-**mini-eq RR** is a from-scratch Rust rewrite of [mini-eq](https://github.com/bhack/mini-eq)
-(Python/GTK/PipeWire), built to eliminate the ~30% CPU cost of the Python
-GIL under real-time audio processing. Same feature set, native speed, no
-interpreter.
+**WirEQ** is a native Rust/GTK4 parametric EQ that routes desktop playback
+through a PipeWire filter-chain. It grew out of a from-scratch rewrite of
+[mini-eq](https://github.com/bhack/mini-eq) (Python/GTK/PipeWire), built to
+eliminate the ~30% CPU cost of the Python GIL under real-time audio
+processing — same core feature set, native speed, plus multi-device
+per-output chains, a fully editable response graph, and a sandbox-proof
+flatpak.
 
-**Repository:** <https://github.com/mrproject72/mini-eq-RR>
-*(not the upstream Python project)*
+**Repository:** <https://github.com/mrproject72/WirEQ>
 
 ## Features
 
@@ -23,9 +25,12 @@ interpreter.
 - Search and import headphone correction presets from AutoEq
 - Import Equalizer APO-style text presets
 
-## Why Rust?
+## Why native?
 
-The original Python implementation uses ~30 modules and the Python GIL for real-time audio processing, causing ~30% CPU usage. This Rust rewrite eliminates the GIL, compiles to native code, and processes audio at native speed with minimal overhead.
+The original Python implementation used the Python GIL for real-time audio
+processing, costing ~30% of a CPU core. WirEQ compiles to native code and
+processes audio at native speed with minimal overhead: ~0.4% of a core at
+idle with the spectrum running.
 
 ## Tech Stack
 
@@ -34,26 +39,26 @@ The original Python implementation uses ~30 modules and the Python GIL for real-
 - **PipeWire 0.10** — audio routing and filter-chain DSP
 - **SPA biquad filters** — native DSP processing
 
-## Install (when available)
+## Install
 
 ```bash
 # Build from source
 cargo build --release
-./target/release/mini-eq-rr
+./target/release/wireq
 
-# Or install via Flatpak (when packaged)
-flatpak install flathub io.github.mrproject72.mini_eq_rr
+# Or install the flatpak bundle from a CI run
+flatpak install --bundle wireq.flatpak
 ```
 
 ## Development
 
 See [AGENTS.md](AGENTS.md) for project structure, architecture, and development workflow.
 
-## Upstream
+## Origins
 
-Original project: [bhack/mini-eq](https://github.com/bhack/mini-eq) by
-[bhack](https://github.com/bhack). mini-eq RR is an independent rewrite
-and is **not** affiliated with or endorsed by the upstream author. The
+The original project: [bhack/mini-eq](https://github.com/bhack/mini-eq) by
+[bhack](https://github.com/bhack). WirEQ began as an independent rewrite of
+it and is **not** affiliated with or endorsed by the upstream author. The
 biquad coefficients are asserted against upstream reference values in the
 test suite so the audio processing matches.
 

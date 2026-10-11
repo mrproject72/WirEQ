@@ -1,16 +1,16 @@
-# mini-eq Project Memory
+# wireq Project Memory
 
 ## Project Identity
 - **Goal**: Rust rewrite of `bhack/mini-eq` (Python/GTK/PipeWire parametric EQ). Same UI look-and-feel, lower CPU, no GIL.
 - **Original upstream**: `https://github.com/bhack/mini-eq` (fetched as `upstream/main`, tags v0.1.0–v0.8.8).
-- **Rust repo**: `{project_dir}` (origin: `git@github.com:mrproject72/mini-eq.git`).
+- **Rust repo**: `{project_dir}` (origin: `git@github.com:mrproject72/wireq.git`).
 - **Tech stack**: Rust 1.98.1, GTK4 0.11.4, libadwaita 0.9.2, pipewire 0.10.1, rustfft 6.4.1, ebur128 0.1.10, clap 4.6.7, tokio 1.53.1.
 
 ## Key Decisions
 - UI must use native GTK4/Libadwaita crates, no web/interpreted layer.
 - PipeWire filter-chain must use native biquad filters (SPA plugin), coefficients at DSP clock rate.
-- Virtual sink: `mini_eq_sink` with description `Mini-EQ-Sink`; output client: `Mini EQ Output`.
-- Presets stored under `~/.config/mini-eq-rr/`; AutoEq cache under `~/.cache/mini-eq-rr/autoeq/`.
+- Virtual sink: `wireq_sink` with description `Mini-EQ-Sink`; output client: `WirEQ Output`.
+- Presets stored under `~/.config/wireq/`; AutoEq cache under `~/.cache/wireq/autoeq/`.
 - Original project has no relation to TUD.
 - Flatpak is the target distribution model.
 - No scope creep: stick to upstream feature set.
@@ -70,6 +70,6 @@
 - Rust toolchain: 1.98.1
 - GTK4 dev: available via `deps/` directory or system packages
 - PipeWire: required for runtime; filter-chain module must be loaded
-- Original project reference: `/var/lib/flatpak/app/io.github.mrproject72.mini_eq_rr/`
-- Original config: `~/.config/mini-eq-rr/`
-- AutoEq cache: `~/.cache/mini-eq-rr/autoeq/`
+- Original project reference: `/var/lib/flatpak/app/io.github.mrproject72.WirEQ/`
+- Original config: `~/.config/wireq/`
+- AutoEq cache: `~/.cache/wireq/autoeq/`

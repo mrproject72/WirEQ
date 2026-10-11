@@ -1,4 +1,4 @@
-//! Main layout for the mini-eq application window.
+//! Main layout for the wireq application window.
 
 use gtk4::prelude::*;
 

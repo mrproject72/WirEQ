@@ -16,10 +16,10 @@ logic throughout. **Read this before touching `routing.rs` / `pipewire_backend.r
 app playback streams (Stream/Output/Audio)
         │  (routed via default-metadata target.node / target.object)
         ▼
-  mini_eq_sink            (Audio/Sink, created by filter-chain module capture.props)
+  wireq_sink            (Audio/Sink, created by filter-chain module capture.props)
         │  (internal filter-chain graph: biquad nodes)
         ▼
-  mini_eq_sink_output     (Stream/Input/Audio, filter-chain playback.props, node.passive=true)
+  wireq_sink_output     (Stream/Input/Audio, filter-chain playback.props, node.passive=true)
         │  (target.object = the user's DEFAULT physical sink)
         ▼
   <physical default sink> (e.g. alsa_output.pci-...analog-stereo)
@@ -32,7 +32,7 @@ Key points:
 - The playback node is **passive**: its link to the physical sink only goes
   `active` when the physical sink is actually running. If the playback node
   targets a *suspended* sink, the link stays `paused` → **no audio** (mute).
-- Apps are moved into `mini_eq_sink` by the **session manager (WirePlumber)**,
+- Apps are moved into `wireq_sink` by the **session manager (WirePlumber)**,
   driven by **default metadata**, NOT by manually creating `link-factory` links.
 
 ---
@@ -43,7 +43,7 @@ Key points:
 
 **Cause:** the Rust `auto_route_to_sink` used `link-factory`
 (`core.create_object::<Link>("link-factory", …)`) to link app streams into
-`mini_eq_sink`. **WirePlumber policy immediately overrides** manual links and
+`wireq_sink`. **WirePlumber policy immediately overrides** manual links and
 re-routes streams back to the default sink. The created links did not persist;
 the stream's effective `target` stayed `none`.
 
@@ -85,7 +85,7 @@ returned the first one — on this machine that was the **Logitech USB headset**
 (a suspended device), while the user's real default was the **PCI sink**.
 
 Because the playback node targeted a suspended sink, its passive link stayed
-`paused`. Apps routed into `mini_eq_sink` → filters → `mini_eq_sink_output` →
+`paused`. Apps routed into `wireq_sink` → filters → `wireq_sink_output` →
 **suspended** Logitech → nothing reaches the PCI sink the user hears → mute.
 
 **Portable fix (upstream `DEFAULT_AUDIO_SINK_KEY`):** read the user's real
@@ -115,7 +115,7 @@ the authoritative current default output. No hardcoded device names, no
 metadata property default.audio.sink = Some("{\"name\":\"<default-output-node>\"}")
   -> Some("<default-output-node>")
 Loading filter-chain module -> <default-output-node>
-mini_eq_sink_output -> <default-output-node>
+wireq_sink_output -> <default-output-node>
 ```
 
 ---
@@ -137,12 +137,12 @@ mini_eq_sink_output -> <default-output-node>
     never changed the actual output. Now pushes `preamp_<side>:b0..a2`.
 
 Other live-control notes:
-- Slider edits (Freq/Q/Gain) push `SPA_PARAM_Props` to the live `mini_eq_sink`
+- Slider edits (Freq/Q/Gain) push `SPA_PARAM_Props` to the live `wireq_sink`
   node proxy via `apply_live_controls` (mirrors upstream `set_node_params`).
 - **`SPA_Props_params` key = `0x80001` (524289)**, confirmed via `pw-cli`
   echo `Props:params (524289)`. (The old `0x80000` was wrong.)
 - Filter-**type** changes are topology changes → restart the filter-chain module
-  (not a live push). Type changes recreate `mini_eq_sink`.
+  (not a live push). Type changes recreate `wireq_sink`.
 
 ---
 
@@ -163,7 +163,7 @@ Other live-control notes:
    changes and re-targets). The property listener is already wired; add the
    re-target action.
 3. **Re-route after filter-type restart** — a type change recreates
-   `mini_eq_sink`; re-run `auto_route_to_sink` afterward so streams don't need
+   `wireq_sink`; re-run `auto_route_to_sink` afterward so streams don't need
    a manual System-EQ re-toggle.
 4. **`node.dont-move` / foreign-target guards** — upstream skips streams that
    are marked `node.dont-move` or already have a foreign `target.object`

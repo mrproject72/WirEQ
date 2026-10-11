@@ -21,12 +21,12 @@ pub fn clamp<T: PartialOrd>(value: T, lower: T, upper: T) -> T {
 
 // ── Application ──────────────────────────────────────────────────────────────
 
-pub const APP_NAME: &str = "Mini EQ";
-pub const OUTPUT_CLIENT_NAME: &str = "Mini EQ Output";
+pub const APP_NAME: &str = "WirEQ";
+pub const OUTPUT_CLIENT_NAME: &str = "WirEQ Output";
 
 /// The PipeWire client name the connection registers with (upstream
 /// `PIPEWIRE_CLIENT_NAME`).
-pub const PIPEWIRE_CLIENT_NAME: &str = "Mini EQ";
+pub const PIPEWIRE_CLIENT_NAME: &str = "WirEQ";
 
 /// The PipeWire client-property key for the application name (upstream
 /// `PIPEWIRE_APPLICATION_NAME_KEY`).
@@ -42,14 +42,14 @@ pub const PIPEWIRE_MEDIA_CATEGORY_KEY: &str = "media.category";
 /// without it a sandboxed (flatpak) client is limited to r/x and every
 /// `set_param` (the entire EQ curve push) is silently ignored.
 pub const PIPEWIRE_MEDIA_CATEGORY: &str = "Manager";
-pub const VIRTUAL_SINK_BASE: &str = "mini_eq_sink";
+pub const VIRTUAL_SINK_BASE: &str = "wireq_sink";
 pub const VIRTUAL_SINK_DESCRIPTION: &str = "Mini-EQ-Sink";
 pub const FILTER_OUTPUT_SUFFIX: &str = "_output";
 
 /// Virtual sink node name for a physical output device (multi-chain EQ).
 ///
-/// One EQ chain per device: `mini_eq_sink_<sanitized device name>`, e.g.
-/// `mini_eq_sink_alsa_output_pci_0000_04_00_6_analog_stereo`.
+/// One EQ chain per device: `wireq_sink_<sanitized device name>`, e.g.
+/// `wireq_sink_alsa_output_pci_0000_04_00_6_analog_stereo`.
 /// `VIRTUAL_SINK_BASE` stays the prefix, so every `starts_with` check in
 /// routing keeps matching. Deterministic across restarts (derived from the
 /// stable PipeWire node name), never empty.
@@ -214,7 +214,7 @@ pub const MODE_INDEX_BY_VALUE: &[usize] = &[0];
 
 // ── File paths ───────────────────────────────────────────────────────────────
 
-pub const APP_ID: &str = "io.github.mrproject72.mini_eq_rr";
+pub const APP_ID: &str = "io.github.mrproject72.WirEQ";
 
 /// XDG config home or `~/.config`.
 pub fn user_config_dir() -> PathBuf {
@@ -229,17 +229,58 @@ pub fn user_config_dir() -> PathBuf {
     home.join(".config")
 }
 
-/// `~/.config/mini-eq-rr`
-pub fn app_config_dir() -> PathBuf {
-    user_config_dir().join("mini-eq")
+/// Recursive directory copy for the config migration (std has no stable
+/// `copy_dir_all`).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> bool {
+    std::fs::create_dir_all(dst).is_ok()
+        && src
+            .read_dir()
+            .map(|entries| {
+                entries.filter_map(|e| e.ok()).all(|entry| {
+                    let target = dst.join(entry.file_name());
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        copy_dir_recursive(&entry.path(), &target)
+                    } else {
+                        std::fs::copy(entry.path(), target).is_ok()
+                    }
+                })
+            })
+            .unwrap_or(false)
 }
 
-/// `$XDG_CONFIG_HOME/mini-eq/{file_name}`
+/// `~/.config/wireq`
+///
+/// One-shot migration: earlier builds stored everything under
+/// `~/.config/mini-eq` (and a brief `~/.config/mini-eq-rr` era). On the
+/// first call after the rename, if the new directory does not exist and an
+/// old one does, the old tree is COPIED (not moved -- the old build stays
+/// usable) so presets, settings and output links survive the rebrand.
+pub fn app_config_dir() -> PathBuf {
+    let new_dir = user_config_dir().join("wireq");
+    // An empty new directory (created by an earlier pre-migration launch)
+    // still counts as unmigrated.
+    let is_unmigrated = !new_dir.exists()
+        || new_dir
+            .read_dir()
+            .map(|mut entries| entries.next().is_none())
+            .unwrap_or(true);
+    if is_unmigrated {
+        for old_name in ["mini-eq-rr", "mini-eq"] {
+            let old_dir = user_config_dir().join(old_name);
+            if old_dir.is_dir() && copy_dir_recursive(&old_dir, &new_dir) {
+                break;
+            }
+        }
+    }
+    new_dir
+}
+
+/// `$XDG_CONFIG_HOME/wireq/{file_name}`
 pub fn app_config_file_path(file_name: &str) -> PathBuf {
     app_config_dir().join(file_name)
 }
 
-/// `$XDG_DATA_HOME/mini-eq/{file_name}` or `~/.local/share/mini-eq/{file_name}`
+/// `$XDG_DATA_HOME/wireq/{file_name}` or `~/.local/share/wireq/{file_name}`
 pub fn app_data_file_path(file_name: &str) -> PathBuf {
     let data_home = std::env::var("XDG_DATA_HOME")
         .ok()
@@ -251,7 +292,7 @@ pub fn app_data_file_path(file_name: &str) -> PathBuf {
                 .unwrap_or_else(|_| PathBuf::from("/tmp"))
                 .join(".local/share")
         });
-    data_home.join("mini-eq").join(file_name)
+    data_home.join("wireq").join(file_name)
 }
 
 // ── Filter Types ─────────────────────────────────────────────────────────────
@@ -1406,10 +1447,7 @@ pub fn load_preset_from_file(path: &Path) -> anyhow::Result<(f64, Vec<EqBand>)> 
         anyhow::bail!("preset version must be a non-negative integer");
     }
     if version > PRESET_VERSION as i64 {
-        anyhow::bail!(
-            "preset version {} is newer than this Mini EQ build",
-            version
-        );
+        anyhow::bail!("preset version {} is newer than this WirEQ build", version);
     }
 
     let preamp_db = payload
@@ -1431,7 +1469,7 @@ pub fn load_preset_from_file(path: &Path) -> anyhow::Result<(f64, Vec<EqBand>)> 
     Ok((preamp_db, bands))
 }
 
-/// Upstream stores presets under `$XDG_CONFIG_HOME/mini-eq/output`
+/// Upstream stores presets under `$XDG_CONFIG_HOME/wireq/output`
 /// (`default_preset_storage_dir`), so keep the same location to stay
 /// interoperable with the Python original.
 pub fn preset_storage_dir() -> std::path::PathBuf {
@@ -2826,7 +2864,7 @@ mod tests {
 
     #[test]
     fn test_load_preset_accepts_missing_and_legacy_version() {
-        let dir = std::env::temp_dir().join("mini_eq_preset_version_test");
+        let dir = std::env::temp_dir().join("wireq_preset_version_test");
         let _ = std::fs::create_dir_all(&dir);
 
         // Version-less payload (implicitly version 0) is accepted, as upstream.
@@ -2854,10 +2892,8 @@ mod tests {
     /// for a sink name.
     #[test]
     fn per_sink_preset_lookup_prefers_the_sink_then_the_fallback() {
-        let dir = std::env::temp_dir().join(format!(
-            "mini-eq-output-preset-lookup-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("wireq-output-preset-lookup-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("output-presets.json");
 
@@ -3064,7 +3100,7 @@ mod tests {
     #[test]
     fn test_output_preset_config_roundtrip() {
         let path = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("output-presets-roundtrip.json");
         let _ = std::fs::remove_file(&path);
 
@@ -3109,7 +3145,7 @@ mod tests {
     #[test]
     fn test_load_output_preset_config_missing_file_is_empty() {
         let path = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("does-not-exist-output-presets.json");
         let _ = std::fs::remove_file(&path);
         let cfg = load_output_preset_config_at(&path).unwrap();
@@ -3125,7 +3161,7 @@ mod tests {
     #[test]
     fn test_load_output_preset_config_v1_is_selected_and_drops_default_link() {
         let path = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("output-presets-v1.json");
         std::fs::write(
             &path,
@@ -3146,7 +3182,7 @@ mod tests {
     #[test]
     fn test_load_output_preset_config_v2_carries_mode_and_monitor() {
         let path = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("output-presets-v2.json");
         std::fs::write(
             &path,
@@ -3165,7 +3201,7 @@ mod tests {
     #[test]
     fn test_output_preset_config_writes_version_2() {
         let path = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("output-presets-v2-write.json");
         let _ = std::fs::remove_file(&path);
         let mut links = std::collections::HashMap::new();
@@ -3195,7 +3231,7 @@ mod tests {
     #[test]
     fn test_write_output_preset_config_creates_parent_dir() {
         let dir = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("nested")
             .join("deeper");
         let _ = std::fs::remove_dir_all(&dir);
@@ -3211,7 +3247,7 @@ mod tests {
         .unwrap();
         assert!(path.is_file());
 
-        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("mini-eq-test").join("nested"));
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("wireq-test").join("nested"));
     }
 
     /// Auto-write-back writes the live curve into the preset linked to a sink,
@@ -3219,7 +3255,7 @@ mod tests {
     #[test]
     fn auto_write_output_preset_for_sink_writes_only_for_singly_linked_preset() {
         let dir = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("auto-write-back");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -3276,7 +3312,7 @@ mod tests {
     #[test]
     fn saved_signature_for_linked_sink_matches_the_preset() {
         let dir = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("saved-signature");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();

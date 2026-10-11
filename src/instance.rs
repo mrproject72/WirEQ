@@ -2,7 +2,7 @@
 //!
 //! The previous `InstanceGuard` was an in-process `Arc<Mutex<bool>>` that was
 //! never even instantiated, so it could not prevent anything: two instances
-//! could run at once, and both would try to own `mini_eq_sink`.
+//! could run at once, and both would try to own `wireq_sink`.
 //!
 //! This is a real lock — an exclusive `flock` on a file under
 //! `$XDG_RUNTIME_DIR`. The kernel releases it when the holder dies, so a
@@ -18,7 +18,7 @@
 //! This port has no such child: `PipeWireBackend` loads the module with
 //! `pw_context_load_module`, so the module lives in the PipeWire **daemon** and
 //! is owned by our client connection. Verified empirically — after `kill -9` of
-//! a running instance, `mini_eq_sink` and `mini_eq_sink_output` are both gone
+//! a running instance, `wireq_sink` and `wireq_sink_output` are both gone
 //! within a few seconds because the daemon drops the module when the client
 //! disconnects. Reaping is therefore unnecessary, and a `/proc` scanner that
 //! kills processes would be a liability rather than a safety net.
@@ -31,7 +31,7 @@ use nix::fcntl::{Flock, FlockArg};
 
 /// Namespaced to this app so a running upstream Python install is not mistaken
 /// for us, and vice versa.
-const LOCK_FILE_NAME: &str = "mini-eq-rr.lock";
+const LOCK_FILE_NAME: &str = "wireq.lock";
 
 /// Why the lock could not be taken.
 #[derive(Debug)]
@@ -56,7 +56,7 @@ impl std::fmt::Display for AcquireError {
     }
 }
 
-/// `$XDG_RUNTIME_DIR/mini-eq-rr.lock`, falling back to a uid-scoped directory
+/// `$XDG_RUNTIME_DIR/wireq.lock`, falling back to a uid-scoped directory
 /// under the system temp dir when `XDG_RUNTIME_DIR` is unset (mirrors upstream
 /// `runtime_lock_path()`).
 pub fn runtime_lock_path() -> PathBuf {
@@ -68,7 +68,7 @@ pub fn runtime_lock_path() -> PathBuf {
     // SAFETY: `getuid` is always safe and cannot fail.
     let uid = unsafe { nix::libc::getuid() };
     std::env::temp_dir()
-        .join(format!("mini-eq-rr-{uid}"))
+        .join(format!("wireq-{uid}"))
         .join(LOCK_FILE_NAME)
 }
 
@@ -182,8 +182,7 @@ mod tests {
     /// A private lock file per test, so the suite is independent of whether the
     /// real app is running and of test ordering.
     fn temp_lock(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("mini-eq-rr-test-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("wireq-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("temp dir");
         dir.join("test.lock")

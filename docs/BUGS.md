@@ -9,7 +9,7 @@ and A/B, with System-wide EQ on).
 
 **Cause of the earlier "A/B does nothing" reports: the EQ was out of the audio
 path.** `routed: false` was confirmed via `GetState` while those reports were
-being filed. The A/B switch bypasses the EQ *inside* `mini_eq_sink`, so with
+being filed. The A/B switch bypasses the EQ *inside* `wireq_sink`, so with
 systemwide routing off, playback streams go straight to the sound card and no EQ
 control — including A/B — can affect anything. Same behaviour as upstream.
 
@@ -69,9 +69,9 @@ Only a human ear is reliable here. When in doubt, read PipeWire's source.
 `instance.rs` defined an `InstanceGuard` that was an in-process
 `Arc<Mutex<bool>>` and was **never instantiated**, so it could not prevent
 anything: two instances could run at once and both would try to own
-`mini_eq_sink`.
+`wireq_sink`.
 
-Now a real exclusive `flock` on `$XDG_RUNTIME_DIR/mini-eq-rr.lock`, acquired in
+Now a real exclusive `flock` on `$XDG_RUNTIME_DIR/wireq.lock`, acquired in
 `main()` after the one-shot subcommands (which must keep working while the app is
 open). A second launch prints the holder's PID and exits 1. The kernel releases
 the lock when the holder dies, so a crash never leaves the app unlaunchable.
@@ -81,7 +81,7 @@ the lock when the holder dies, so a crash never leaves the app unlaunchable.
 because the *Python* app spawns the filter chain as a child process. This port
 does not — `PipeWireBackend` uses `pw_context_load_module`, so the module lives
 in the daemon and is owned by our client connection. Verified empirically: after
-`kill -9` of a running instance, `mini_eq_sink` and `mini_eq_sink_output` are
+`kill -9` of a running instance, `wireq_sink` and `wireq_sink_output` are
 both gone within a few seconds. A `/proc` scanner that kills processes would be a
 liability, not a safety net.
 
@@ -114,7 +114,7 @@ refreshed on the existing 500 ms device watcher, and the model is only touched
 when the list actually changes so it does not fight the user's selection.
 
 Verified on this machine: `pw-dump` reports 6 `Audio/Sink` nodes, of which
-`mini_eq_sink` is ours; the app now enumerates the other **5** —
+`wireq_sink` is ours; the app now enumerates the other **5** —
 HDMI, onboard analog, Logitech USB, PUPGSIS USB and Multi-Output.
 
 ### Selecting a device now really re-targets the EQ — but it costs a rebuild
@@ -142,7 +142,7 @@ means **rebuilding the filter chain**. `retarget_output()` therefore:
 
 - validates the sink exists, so a bad name never triggers a disruptive rebuild;
 - reloads the module with the new `output_sink` in its args;
-- **waits (bounded, 2 s) for the recreated `mini_eq_sink` to appear** —
+- **waits (bounded, 2 s) for the recreated `wireq_sink` to appear** —
   `pw_context_load_module` returns before the registry carries the new node, so
   an immediate re-route failed with "Creation failed";
 - re-routes all playback streams, because the recreated sink has a **new
@@ -164,7 +164,7 @@ output source: the moment I switch to another output the monitor stops
 working."*
 
 **Cause.** The monitor taps the **monitor ports of a physical sink**
-(`alsa_output...:monitor_FL/FR -> mini-eq-analyzer:input_FL/FR`, see
+(`alsa_output...:monitor_FL/FR -> wireq-analyzer:input_FL/FR`, see
 `pump_monitor_link`). The filter-chain rebuild performed by `retarget_output`
 does not touch those ports — they belong to the ALSA node, not to the EQ — so
 after a switch the capture stream was still listening to the sink the EQ had
@@ -216,7 +216,7 @@ the same switch path.
   `APP_ICON_SEARCH_PATH = "assets/icons"`, but `src/assets` does not exist, so
   `copy_app_icons` hits its `if !source_dir.exists() { return; }` and silently
   installs nothing while the generated `.desktop` file still declares
-  `Icon=io.github.mrproject72.mini_eq_rr`.
+  `Icon=io.github.mrproject72.WirEQ`.
 - ~~**Analyzer renders blank: it is never fed data.**~~ **FIXED** — the 33 ms
   tick now calls `utility.analyzer.update(&levels)`.
 - ~~**Cannot name a new preset or rename one.**~~ **FIXED.** Add now
@@ -325,9 +325,9 @@ the same switch path.
   could do anything at all:
   1. `acquire_bus_name()` existed but **was never called**. Registering the
      object on the connection does not claim the well-known name, so
-     `gdbus call --dest io.github.mrproject72.mini_eq_rr` returned
+     `gdbus call --dest io.github.mrproject72.WirEQ` returned
      `ServiceUnknown`. `register()` now owns the name itself.
-  2. `AppState` (`main.rs`) was the only `MiniEqAppHandler` impl and was
+  2. `AppState` (`main.rs`) was the only `WirEqAppHandler` impl and was
      disconnected from the window — `window.rs` had zero references to it.
      `SetEqEnabled` / `SetRoutingEnabled` flipped a `Mutex<bool>` nothing read;
      `SetPreset`, `PresentWindow` and `Quit` were empty; `AnalyzerLevels`
@@ -359,7 +359,7 @@ the same switch path.
   `update_state_live_or_reload` hardcoded `eq_enabled = true`, so bands were
   always pushed wet. It now has a `state-set` handler, the tick folds the
   switch state into the push signature, and `eq_enabled` is passed through to
-  `apply_live_controls`. `MiniEqAppHandler` gained `running()` (upstream:
+  `apply_live_controls`. `WirEqAppHandler` gained `running()` (upstream:
   `controller is not None`) — `build_state` previously hardcoded
   `running: false`.
 
@@ -369,10 +369,10 @@ the same switch path.
   so the signal never fired at all. Now time-throttled at 100 ms, matching
   upstream `CONTROL_ANALYZER_EMIT_INTERVAL_SECONDS`.
 
-- **`target/debug/mini-eq` is a stale artifact that shadows the real binary.**
-  The crate builds `mini-eq-rr`; `target/debug/mini-eq` is left over from before
+- **`target/debug/wireq` is a stale artifact that shadows the real binary.**
+  The crate builds `wireq`; `target/debug/wireq` is left over from before
   the rename (mtime 2026-09-28). `docs/2026-09-28-handover.md` instructs
-  running `./target/debug/mini-eq`, so a live check can silently test 6-day-old
+  running `./target/debug/wireq`, so a live check can silently test 6-day-old
   code. Delete it and correct the handover/`dev-restart.sh`.
 
 - **Headroom/Auto-Safe peak estimate was graph-clamped (under-compensated stacked boosts).** `estimate_response_peak_db` sampled through the display-clamped `total_response_db` (±36 dB), so 4× HiShelf @ +20 dB (true peak ~+84 dB) reported only +36 dB and Auto-Safe pinned at the −24 dB floor could never clear the warning. Split into `total_response_db_unclamped` + clamped wrapper; the estimate now uses the unclamped path (upstream `clamp_output=False`). Locked in by `test_estimate_response_peak_db_is_unclamped`. See `2026-09-28-updates.md`.
@@ -395,11 +395,11 @@ the same switch path.
 
 - **App ID decision — settled, but a config migration is still missing.**
   `core::APP_ID`, `analyzer::ANALYZER_APPLICATION_ID`, the D-Bus service name
-  and the autostart file all use `io.github.mrproject72.mini_eq_rr`. This was
+  and the autostart file all use `io.github.mrproject72.WirEQ`. This was
   verified to be consistent across `core.rs`, `dbus_control.rs` and
   `desktop_integration.rs`, and it no longer collides with an upstream install
-  on the same machine. Config lives in `~/.config/mini-eq-rr`, so an existing
-  `~/.config/mini-eq` is **not** picked up — add a one-shot migration if that
+  on the same machine. Config lives in `~/.config/wireq`, so an existing
+  `~/.config/wireq` is **not** picked up — add a one-shot migration if that
   matters.
 - **Auto-Safe lowers the volume noticeably — EXPECTED BEHAVIOUR, not a bug.**
   With Auto-Safe engaged the whole output is attenuated by
@@ -446,7 +446,7 @@ the same switch path.
 ## Bug Report Template
 
 When reporting bugs, please include:
-1. mini-eq version or commit hash
+1. wireq version or commit hash
 2. Steps to reproduce
 3. Expected vs actual behavior
 4. Relevant log output (`--verbose` flag)
@@ -863,7 +863,7 @@ unconditionally**. Two consequences:
    `stream_router` `if self.routed`); the port had no such flag, only
    `current_sink`, which is where the *chain* points.
 2. **With routing ON the streams were pointed at a node that no longer existed.**
-   The reload destroys `mini_eq_sink` and gives it a new `object.serial`, so
+   The reload destroys `wireq_sink` and gives it a new `object.serial`, so
    every routed stream was aimed at nothing while the code waited (up to 2 s) for
    the new node to appear. WirePlumber's recovery from that is slower and less
    predictable than a deliberate move.
@@ -899,14 +899,14 @@ The cause was the belief recorded in `retarget_output`:
 That is wrong, and the "verified" in it was not: the write *is* honoured.
 `node.passive` is a property of the adapter's node, not of the stream the
 adapter exposes, and the chain's output is an ordinary stream node named
-`mini_eq_sink_output` whose target is ordinary metadata. Upstream moves it live
+`wireq_sink_output` whose target is ordinary metadata. Upstream moves it live
 (`move_named_output_stream_to_target`) and only falls back to `restart_engine`
 when that raises.
 
 Proven on this machine with a throwaway probe (since removed), which moved the
 stream to the sink it was already on and read the value back:
 
-    PROBE live move mini_eq_sink_output -> alsa_output.pci-0000_04_00.6.analog-stereo:
+    PROBE live move wireq_sink_output -> alsa_output.pci-0000_04_00.6.analog-stereo:
     verified=true (target.object Some("69") -> Some("69)", expected "69")
 
 `retarget_output` now follows upstream's order:
@@ -914,7 +914,7 @@ stream to the sink it was already on and read the value back:
 1. **Move the chain's output stream live**, and *verify* the move by reading the
    value back (`move_stream_to_target_checked`, bounded at 300 ms). On success
    the virtual sink node is never destroyed, the user's streams keep the links
-   they already have — they stay pointed at `mini_eq_sink`, only the chain's
+   they already have — they stay pointed at `wireq_sink`, only the chain's
    destination moves — and no stream is touched at all. That is the whole point
    of the feature: control a different output device without changing the link.
 2. **Only if that fails**, rebuild the module as before, with the suspend /

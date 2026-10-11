@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Live end-to-end test for mini-eq RR.
+# Live end-to-end test for wireq RR.
 #
 # Drives the real app (under Xvfb, no visible window) over D-Bus and asserts
 # on the real PipeWire graph via pw-dump. Covers the reported regressions:
@@ -29,8 +29,8 @@ if [ "${LIVE_TEST_HERMETIC:-1}" = 1 ] && [ -z "${LIVE_TEST_INNER:-}" ]; then
   exec dbus-run-session -- env LIVE_TEST_INNER=1 "$0" "$@"
 fi
 
-APP=./target/release/mini-eq-rr
-BUS=io.github.mrproject72.mini_eq_rr
+APP=./target/release/wireq
+BUS=io.github.mrproject72.WirEQ
 DBUS="python3 tests-live/dbus.py"
 PW="python3 tests-live/pw_state.py"
 DISPLAY_NUM=:99
@@ -106,7 +106,7 @@ eq_name_for() {
   python3 -c "
 import re, sys
 s = re.sub(r'[^A-Za-z0-9_.-]', '_', sys.argv[1]).strip('_.-')
-print('mini_eq_sink_' + (s if s else 'unknown'))" "$(state_val output_sink)"
+print('wireq_sink_' + (s if s else 'unknown'))" "$(state_val output_sink)"
 }
 pwstate() { PW_STATE_DEFAULT_EQ="$(eq_name_for)" $PW; }
 
@@ -132,9 +132,9 @@ except Exception as e:
 }
 
 # --- 0. precondition: no instance running -----------------------------------
-if gdbus call --session --dest "$BUS" --object-path /io/github/mrproject72/mini_eq_rr/Control \
-     --method "$BUS".MiniEqRR.Control.GetState >/dev/null 2>&1; then
-  echo "ABORT: a mini-eq instance is already running (bus name owned). Close it first."
+if gdbus call --session --dest "$BUS" --object-path /io/github/mrproject72/WirEQ/Control \
+     --method "$BUS".WirEQ.Control.GetState >/dev/null 2>&1; then
+  echo "ABORT: a wireq instance is already running (bus name owned). Close it first."
   exit 99
 fi
 
@@ -215,7 +215,7 @@ for s in json.load(sys.stdin)['streams']:
 echo "--- T1: startup state"
 [ -n "$INIT_SINK" ] || { echo "ABORT: output_sink empty at startup (engine did not start)"; exit 99; }
 MINIEQ_SERIAL="$(pwstate | python3 -c 'import json,sys; m=json.load(sys.stdin)["minieq"]; print(m["serial"] if m else "")')"
-[ -n "$MINIEQ_SERIAL" ] || { echo "ABORT: mini_eq_sink missing at startup"; exit 99; }
+[ -n "$MINIEQ_SERIAL" ] || { echo "ABORT: wireq_sink missing at startup"; exit 99; }
 check "startup routed=false" test "$(state_val routed)" = "false"
 SINKS_JSON="$(pwstate | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["sinks"].keys()))')"
 check "startup output_sink is a real sink (not hardcoded)" bash -c "echo \" $SINKS_JSON \" | grep -q \" $INIT_SINK \""
@@ -236,10 +236,10 @@ echo "  second sink: ${SINK_B:-(none available)}"
 # Two distinguishable presets, each linked to one output. Backs up the user's
 # links file and preset dir additions; cleanup() restores both. Defined early
 # so the audibility check (T3b) can use livetest_A before T6 re-seeds.
-# Real preset storage is ~/.config/mini-eq/output (preset_storage_dir);
-# ~/.config/mini-eq/presets is stale legacy and invisible to the app.
-PRESET_DIR="$HOME/.config/mini-eq/output"
-LINKS_FILE="$HOME/.config/mini-eq/output-presets.json"
+# Real preset storage is ~/.config/wireq/output (preset_storage_dir);
+# ~/.config/wireq/presets is stale legacy and invisible to the app.
+PRESET_DIR="$HOME/.config/wireq/output"
+LINKS_FILE="$HOME/.config/wireq/output-presets.json"
 LINKS_BAK=tmp/live/links.bak.json
 seed_output_presets() {
   # Back up once: this runs twice per run (T3b + T6) and the second backup
@@ -344,11 +344,11 @@ ensure_tone_routed() {
 }
 
 # --- T2: switch on --------------------------------------------------------------
-echo "--- T2: EQ on routes the tone through mini_eq_sink"
+echo "--- T2: EQ on routes the tone through wireq_sink"
 $DBUS call SetRoutingEnabled b:true >/dev/null
 check "routed=true after on" wait_for 15 routed-true \
   '[ "$(echo "$S" | grep "^routed=" | cut -d= -f2)" = "true" ]'
-check "tone target is mini_eq_sink" wait_for 15 tone-routed \
+check "tone target is wireq_sink" wait_for 15 tone-routed \
   "[ \"\$(echo \"\$P\" | python3 -c \"import json,sys; print([s['target_object'] for s in json.load(sys.stdin)['streams'] if str(s['id'])=='$TONE_ID'][0])\")\" = \"$MINIEQ_SERIAL\" ]"
 # Verified flow, not intent: read-back count of streams observably inside an
 # EQ sink (metadata target or live links). Catches the sandbox lie where
@@ -385,7 +385,7 @@ sleep 3
 EQ_SERIAL="$(pwstate | python3 -c 'import json,sys; m=json.load(sys.stdin)["minieq"]; print(m["serial"] if m else "")')"
 check "tone routed for level check" ensure_tone_routed "$EQ_SERIAL"
 check "tone actually flowing (not stalled)" tone_flowing
-EQ_OUT="$(python3 -c "import re;print('mini_eq_sink_'+re.sub(r'[^A-Za-z0-9_.-]','_','$INIT_SINK').strip('_.-')+'_output')")"
+EQ_OUT="$(python3 -c "import re;print('wireq_sink_'+re.sub(r'[^A-Za-z0-9_.-]','_','$INIT_SINK').strip('_.-')+'_output')")"
 sleep 3
 WET_RMS="$(eq_output_rms "$EQ_OUT")" || WET_RMS=""
 check "wet chain output audible" python3 -c "assert float('$WET_RMS') > 100.0, 'chain silent while routed: $WET_RMS'"
@@ -434,7 +434,7 @@ if [ -n "$SINK_B" ]; then
   $DBUS call SetPreset s:livetest_A >/dev/null
   sleep 2
   check "preset A active on A" test "$(state_val preset_name)" = "livetest_A"
-  EQ_A="$(python3 -c "import re;print('mini_eq_sink_'+re.sub(r'[^A-Za-z0-9_.-]','_','$INIT_SINK').strip('_.-'))")"
+  EQ_A="$(python3 -c "import re;print('wireq_sink_'+re.sub(r'[^A-Za-z0-9_.-]','_','$INIT_SINK').strip('_.-'))")"
   EQ_A_SERIAL="$(pwstate | python3 -c "import json,sys; m=json.load(sys.stdin)['eq_sinks'].get('$EQ_A'); print(m['serial'] if m else '')")"
   check "tone sits on eq(A)" test "$(stream_target_object)" = "$EQ_A_SERIAL"
 
@@ -461,7 +461,7 @@ if [ -n "$SINK_B" ]; then
   sleep 2
   $DBUS call SetRoutingEnabled b:true >/dev/null
   sleep 2
-  EQ_B="$(python3 -c "import re;print('mini_eq_sink_'+re.sub(r'[^A-Za-z0-9_.-]','_','$SINK_B').strip('_.-'))")"
+  EQ_B="$(python3 -c "import re;print('wireq_sink_'+re.sub(r'[^A-Za-z0-9_.-]','_','$SINK_B').strip('_.-'))")"
   EQ_B_SERIAL="$(pwstate | python3 -c "import json,sys; m=json.load(sys.stdin)['eq_sinks'].get('$EQ_B'); print(m['serial'] if m else '')")"
   check "chain for B exists once its EQ is enabled" test -n "$EQ_B_SERIAL"
   check "tone on A stays on eq(A) while B's EQ comes up" test "$(stream_target_object)" = "$EQ_A_SERIAL"
@@ -512,7 +512,7 @@ fi
 # --- T8: switch off restores ----------------------------------------------------------------
 echo "--- T7: EQ off hands the tone back"
 $DBUS call SetRoutingEnabled b:false >/dev/null
-check "tone target no longer mini_eq_sink" wait_for 15 tone-unrouted \
+check "tone target no longer wireq_sink" wait_for 15 tone-unrouted \
   "[ \"\$(echo \"\$P\" | python3 -c \"import json,sys; print([s['target_object'] for s in json.load(sys.stdin)['streams'] if str(s['id'])=='$TONE_ID'][0])\")\" != \"$MINIEQ_SERIAL\" ]"
 TGT_OFF="$(stream_target_object)"
 check "tone target valid (empty=WP default, or a real sink serial)" python3 -c "

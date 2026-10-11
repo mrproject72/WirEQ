@@ -61,6 +61,6 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: mini-eq-rr.flatpak
-          manifest-path: io.github.mrproject72.mini_eq_rr.yml
+          manifest-path: io.github.mrproject72.WirEQ.yml
           cache: true
           cache-key: flatpak-builder-${{ github.sha }}

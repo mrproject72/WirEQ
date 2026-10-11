@@ -20,7 +20,7 @@ Please include:
 
 ## Security Considerations
 
-mini-eq is an audio processing application that runs with PipeWire access. Security considerations include:
+wireq is an audio processing application that runs with PipeWire access. Security considerations include:
 
 - Audio routing permissions
 - PipeWire filter-chain access

@@ -1,4 +1,4 @@
-# AGENTS.md — mini-eq (Rust Rewrite)
+# AGENTS.md — WirEQ
 
 ## Required reading (in this order)
 
@@ -11,7 +11,7 @@
 
 Important considerations:
 
-### This is a Rust rewrite of the Python mini-eq project
+### This is a Rust rewrite of the Python wireq project
 - Original: https://github.com/bhack/mini-eq (Python/GTK/PipeWire)
 - Goal: Same functionality, significantly lower CPU usage, no GIL
 - Target: PipeWire system-wide parametric EQ using Rust + GTK4 + Libadwaita
@@ -32,7 +32,7 @@ Important considerations:
 
 ## Project Overview
 
-Mini EQ is a compact system-wide parametric equalizer for PipeWire desktops. This is a Rust rewrite of the original Python project (https://github.com/bhack/mini-eq) to eliminate the 30% CPU usage caused by Python's GIL and real-time audio processing overhead.
+WirEQ is a compact system-wide parametric equalizer for PipeWire desktops. This is a Rust rewrite of the original Python project (https://github.com/bhack/mini-eq) to eliminate the 30% CPU usage caused by Python's GIL and real-time audio processing overhead.
 
 ### Original Python project (reference)
 - ~30 Python modules, ~2000+ lines
@@ -72,10 +72,10 @@ Mini EQ is a compact system-wide parametric equalizer for PipeWire desktops. Thi
 | Rust | 1.98.1 (cargo 1.98.1) |
 | GTK4 | System packages required |
 | PipeWire | System PipeWire with filter-chain module |
-| Original project | /var/lib/flatpak/app/io.github.bhack.mini-eq/ |
-| Original config | ~/.config/mini-eq/ |
-| Original presets | ~/.config/mini-eq/ |
-| AutoEq profile index | ~/.config/mini-eq/autoeq/entries.json |
+| Original project | /var/lib/flatpak/app/io.github.bhack.wireq/ |
+| Original config | ~/.config/wireq/ |
+| Original presets | ~/.config/wireq/ |
+| AutoEq profile index | ~/.config/wireq/autoeq/entries.json |
 
 ## Architecture
 
@@ -128,7 +128,7 @@ src/
 differently.
 
 ### PipeWire filter-chain architecture
-- Creates virtual sink: `mini_eq_sink` → the system default output node
+- Creates virtual sink: `wireq_sink` → the system default output node
   (`<default-output-node>`). **The target node is discovered at runtime**
   via `routing.rs::find_node_target` / `target_sink: Option<String>` and
   the PipeWire `default` metadata — it is never hardcoded to a specific
@@ -157,8 +157,8 @@ differently.
 
 ### Create new project
 ```bash
-cd ~/code/mini-eq
-cargo init --name mini-eq
+cd ~/code/wireq
+cargo init --name wireq
 ```
 
 ### Build
@@ -209,12 +209,12 @@ cargo run -- --headless --background --duration 30
 **Critical rules:**
 - PipeWire filter-chain must use native biquad filters (SPA plugin)
 - Coefficients calculated at DSP clock rate, not pinned to 48 kHz
-- Virtual sink name: `mini_eq_sink` with description `Mini-EQ-Sink`
-- Output client name: `Mini EQ Output`
+- Virtual sink name: `wireq_sink` with description `Mini-EQ-Sink`
+- Output client name: `WirEQ Output`
 - Background mode keeps EQ active after window closes
 - Auto-route routes all output streams to virtual sink
-- Presets stored under `~/.config/mini-eq/`
-- AutoEq profile index cached under `~/.config/mini-eq/autoeq/entries.json`
+- Presets stored under `~/.config/wireq/`
+- AutoEq profile index cached under `~/.config/wireq/autoeq/entries.json`
 
 **Important:** The Rust rewrite must produce identical audio processing results to the Python original. Biquad filter coefficients must match exactly.
 
@@ -232,7 +232,7 @@ cargo run -- --headless --background --duration 30
 ## External References
 
 - Original project: https://github.com/bhack/mini-eq
-- Flathub: https://flathub.org/apps/io.github.bhack.mini-eq
+- Flathub: https://flathub.org/apps/io.github.bhack.wireq
 - AutoEq: https://autoeq.app/
 - PipeWire: https://pipewire.org/
 - Libadwaita: https://gitlab.gnome.org/GNOME/libadwaita
@@ -240,8 +240,8 @@ cargo run -- --headless --background --duration 30
 ## Status Tracking
 
 - **Phase 0**: ✅ Complete — Source-linked divergence assessment against upstream `bhack/mini-eq` main branch; full 8-phase Rust conversion plan documented at `docs/PLAN/divergence-assessment-and-rust-plan.md`.
-- **Phase 1**: ⏳ In Progress — Backend engine parity: `pipewire_backend.rs` and `routing.rs` compile but are unverified on live PipeWire; virtual sink/filter-chain/output node creation and stream routing are stubs.
-- **Phase 2**: ⏳ Partial — Fader rendering/interaction converged with upstream Python; responsive fader heights; the 3-layer graph overlay exists, but **the graph has no click/drag editing** (no `GestureClick`/`GestureDrag` is attached to it — the graph is display-only). See `docs/PLAN/graph-parity-2026-10-04.md` for the full inventory of missing graph behaviour (per-band dots, band dragging, axis labels, plot margins, analyzer bars+line).
+- **Phase 1**: ✅ Complete — Backend engine parity verified on live PipeWire (native + flatpak): per-device chains, stream routing, adoption, stale-target handling, exit restore. Protected by the gold path (`tests-live/twodev_gold_path.sh`, 10 checks) and the native suite (47 checks).
+- **Phase 2**: ✅ Complete — Full graph parity (2026-10-11): per-band dots with drag editing (click-to-select, 32 px grab, X→frequency / Y→gain with other-band subtraction, Shift→Q), analyzer bars + stepped line (log-spaced, x42 shaping), curve gradient fill/glow/bypass styling, focus row + band-count chip, LUFS meter bar, fader-drag selection. See `docs/PLAN/graph-parity-2026-10-04.md` (steps 1-9 done).
 - **Phase 3**: ✅ Complete — Adaptive shell: `AdwOverlaySplitView` + `AdwClamp(max=1480)` + `AdwToastOverlay`, breakpoints at 1320sp/1080sp, F9 toggle, toolbar with output dropdown + route switch + inspector toggle.
 - **Phase 4**: ✅ Complete — Utility/sidebar: **two** pages, Preset and Output
   (device settings + the monitor's LUFS readout). The "Analyzer" page and the
@@ -250,9 +250,9 @@ cargo run -- --headless --background --duration 30
   the **main window's** output control row, in the gear button immediately before
   the Smooth dropdown.
 - **Phase 5**: ✅ Complete — Analyzer and headroom: FFT spectrum, LUFS metering, smoothing/display-gain/freeze controls, 3-segment headroom meter with Set Safe button.
-- **Phase 6**: ⏳ Partial — Presets: rename, name prompt, revert/reapply baseline, reset-to-neutral and file monitoring are implemented; **no save/save-as, delete, import/export, fallback presets, or output-preset linking**. AutoEq: **reachable** — dialog opened from the Presets panel, index fetched on open, import saves + loads a preset (2026-10-04). Preferences: functional dialog wired to settings persistence.
+- **Phase 6**: ✅ Complete — Presets: add (save), update (overwrite), rename, delete (with confirmations; the curve is kept), revert/reapply, reset-to-neutral, file monitoring, output-preset linking, APO import, AutoEq import, export.
 - **Phase 7**: ✅ Complete — DSP/core math: biquad coefficients and constants match upstream for 9 selectable filter types; `total_response_db`, `format_frequency`, index maps, graph response helpers all implemented. Window state: monitor geometry fallback implemented.
-- **Phase 8**: ⏳ Pending — Testing (29 unit tests pass), Flatpak packaging, performance validation, GNOME Shell extension.
+- **Phase 8**: ✅ Complete — Flatpak packaging (works end-to-end, sandbox-proof routing verified), 141 unit tests, the gold path (10 checks), the native suite (47 checks), CI green, performance validated (~0.4% core at idle with the spectrum running). The GNOME Shell extension is a separate follow-up (see docs/TODO.md).
 
 ### Current state (2026-10-04)
 - `cargo check --release` compiles with 0 warnings, 0 errors.
@@ -262,17 +262,17 @@ cargo run -- --headless --background --duration 30
 - Upstream reference fetched: `https://github.com/bhack/mini-eq.git`
   (41 Python modules, 41 test files).
 
-**The binary is `mini-eq-rr`, not `mini-eq`.** `target/debug/mini-eq` is a
+**The binary is `wireq`, not `wireq`.** `target/debug/wireq` is a
 stale pre-rename artifact — do not run it and do not trust a live check that
-used it. Use `./target/debug/mini-eq-rr`. This trap has already invalidated one
+used it. Use `./target/debug/wireq`. This trap has already invalidated one
 verification round.
 
 **Live D-Bus verification** (the control interface is now wired and working):
 
 ```bash
-D=io.github.mrproject72.mini_eq_rr
-O=/io/github/mrproject72/mini_eq_rr/Control
-M=io.github.mrproject72.MiniEqRR.Control
+D=io.github.mrproject72.WirEQ
+O=/io/github/mrproject72/WirEQ/Control
+M=io.github.mrproject72.WirEQ.Control
 gdbus call --session --dest $D --object-path $O --method $M.GetState
 gdbus call --session --dest $D --object-path $O --method $M.SetEqEnabled false
 gdbus monitor --session --dest $D     # StateChanged / AnalyzerLevelsChanged
@@ -284,7 +284,7 @@ Full analysis and prioritised next steps:
 **`docs/PLAN/gap-closure-2026-10-04.md`**. Highest-value open items:
 
 - ~~**No single-instance guard.**~~ **FIXED 2026-10-04** — `flock` on
-  `$XDG_RUNTIME_DIR/mini-eq-rr.lock`; reaping not needed (daemon drops the module
+  `$XDG_RUNTIME_DIR/wireq.lock`; reaping not needed (daemon drops the module
   on client disconnect).
 - **Preset lifecycle** — no save/save-as, delete, import/export, fallback
   presets, or output-preset linking.
@@ -301,12 +301,12 @@ Full analysis and prioritised next steps:
 ```bash
 # Install dev dependencies (if not already installed)
 cd /tmp/kilo && apt download libgtk-4-dev libadwaita-1-dev libgraphene-1.0-dev libpipewire-0.3-dev libspa-0.2-dev libdbus-1-dev
-for deb in *.deb; do dpkg-deb -x "$deb" ~/code/mini-eq/deps/; done
+for deb in *.deb; do dpkg-deb -x "$deb" ~/code/wireq/deps/; done
 
 # Only env var needed: PKG_CONFIG_PATH. The linker search path for deps/*.so
 # is added automatically by build.rs (conditional on deps/ existing, so CI is
 # unaffected).
-export PKG_CONFIG_PATH="$HOME/code/mini-eq/deps/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="$HOME/code/wireq/deps/usr/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH"
 
 # Build / test / run
 cargo build --release
@@ -331,7 +331,7 @@ git ls-tree --name-only -r upstream/main | head -80
   Presets panel, HTTP runs on a worker thread (it previously aborted the
   process), and imports save + load a preset. See `docs/BUGS.md`.
 - ~~**No single-instance guard.**~~ **FIXED 2026-10-04** — real `flock` on
-  `$XDG_RUNTIME_DIR/mini-eq-rr.lock`; a second launch is refused and reports the
+  `$XDG_RUNTIME_DIR/wireq.lock`; a second launch is refused and reports the
   holder PID. Stale filter-chain reaping is not needed: the module lives in the
   daemon and is dropped on client disconnect (verified with `kill -9`).
 - Preset lifecycle incomplete: no save/save-as, import/export/delete, fallback

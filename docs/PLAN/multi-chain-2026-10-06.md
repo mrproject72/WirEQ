@@ -16,9 +16,9 @@ running chain, simultaneously.
 ## Design
 
 - **One virtual sink + filter-chain module per physical device.**
-  Sink name: `mini_eq_sink_<sanitized device name>` (`core::eq_virtual_sink_for`),
-  e.g. `mini_eq_sink_alsa_output_pci_0000_04_00_6_analog_stereo`.
-  `VIRTUAL_SINK_BASE` (`mini_eq_sink`) stays the prefix; every
+  Sink name: `wireq_sink_<sanitized device name>` (`core::eq_virtual_sink_for`),
+  e.g. `wireq_sink_alsa_output_pci_0000_04_00_6_analog_stereo`.
+  `VIRTUAL_SINK_BASE` (`wireq_sink`) stays the prefix; every
   `starts_with(VIRTUAL_SINK_BASE)` check keeps working.
 - **Chains are created on demand** (first route/enable/monitor on that
   device) and live until quit. No retargeting ever: a chain is born already

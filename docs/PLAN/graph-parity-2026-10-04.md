@@ -1,7 +1,7 @@
 # Graph parity: what the Rust port is missing vs upstream
 
 Audit date: 2026-10-04. Upstream read from the `upstream/main` git ref
-(`src/mini_eq/window_graph.py`, `analyzer_widget.py`, `window_layout.py`);
+(`src/wireq/window_graph.py`, `analyzer_widget.py`, `window_layout.py`);
 Rust read from the working tree at `709c52e`.
 
 Upstream's graph is a 3-layer `Gtk.Overlay` (`window_layout.py:370-422`):

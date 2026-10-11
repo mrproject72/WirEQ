@@ -1,4 +1,4 @@
-//! Appearance and theme management for mini-eq.
+//! Appearance and theme management for wireq.
 
 use gtk4::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -45,14 +45,10 @@ pub fn style_manager_is_dark() -> bool {
     adw::StyleManager::default().is_dark()
 }
 
-/// Sync the mini-eq CSS class (mini-eq-dark / mini-eq-light) on a widget.
+/// Sync the wireq CSS class (wireq-dark / wireq-light) on a widget.
 pub fn sync_appearance_css_class(widget: &impl IsA<gtk4::Widget>) {
     let is_dark = style_manager_is_dark();
-    let class = if is_dark {
-        "mini-eq-dark"
-    } else {
-        "mini-eq-light"
-    };
+    let class = if is_dark { "wireq-dark" } else { "wireq-light" };
     widget.set_css_classes(&[class]);
 }
 
@@ -70,7 +66,7 @@ impl AppearanceSettings {
     pub fn load() -> Self {
         if let Ok(data) = std::fs::read_to_string(
             std::path::Path::new(&std::env::var("HOME").unwrap_or_default())
-                .join(".config/mini-eq-rr/appearance.json"),
+                .join(".config/wireq/appearance.json"),
         ) {
             serde_json::from_str(&data).unwrap_or_default()
         } else {
@@ -79,8 +75,8 @@ impl AppearanceSettings {
     }
 
     pub fn save(&self) {
-        let path = std::path::Path::new(&std::env::var("HOME").unwrap_or_default())
-            .join(".config/mini-eq-rr");
+        let path =
+            std::path::Path::new(&std::env::var("HOME").unwrap_or_default()).join(".config/wireq");
         let _ = std::fs::create_dir_all(&path);
         let data = serde_json::to_string_pretty(self).unwrap_or_default();
         let _ = std::fs::write(path.join("appearance.json"), data);

@@ -25,21 +25,20 @@ impl PreferencesDialog {
 
         let background_row = adw::SwitchRow::new();
         background_row.set_title("Keep Running in Background");
-        background_row.set_subtitle("Closing the window keeps Mini EQ active for this session.");
+        background_row.set_subtitle("Closing the window keeps WirEQ active for this session.");
         background_row.set_active(load_background_mode());
         group.add(&background_row);
 
         let start_row = adw::SwitchRow::new();
         start_row.set_title("Start at Login");
-        start_row.set_subtitle("Start Mini EQ hidden when you sign in.");
+        start_row.set_subtitle("Start WirEQ hidden when you sign in.");
         start_row.set_active(load_start_at_login());
         start_row.set_sensitive(background_row.is_active());
         group.add(&start_row);
 
         let start_active_row = adw::SwitchRow::new();
         start_active_row.set_title("Enable System-wide EQ at Login");
-        start_active_row
-            .set_subtitle("Route system audio through Mini EQ when it starts at login.");
+        start_active_row.set_subtitle("Route system audio through WirEQ when it starts at login.");
         start_active_row.set_active(load_start_active_at_login());
         start_active_row.set_sensitive(background_row.is_active() && start_row.is_active());
         group.add(&start_active_row);

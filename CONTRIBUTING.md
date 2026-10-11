@@ -1,6 +1,6 @@
-# Contributing to mini-eq
+# Contributing to wireq
 
-Thank you for your interest in contributing to mini-eq! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to wireq! This document provides guidelines and instructions for contributing.
 
 ## Getting Started
 
@@ -16,8 +16,8 @@ Thank you for your interest in contributing to mini-eq! This document provides g
 
 ```bash
 # Clone the repository
-git clone git@github.com:mrproject72/mini-eq.git
-cd mini-eq
+git clone git@github.com:mrproject72/wireq.git
+cd wireq
 
 # Install system dependencies (if not already installed)
 sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libgraphene-1.0-dev libpipewire-0.3-dev libspa-0.2-dev pkg-config
@@ -52,9 +52,9 @@ cargo clippy --release -- -D warnings
 
 ### Reporting Bugs
 
-Use the [Bug Report template](https://github.com/mrproject72/mini-eq/issues/new?template=bug_report.yml). Include:
+Use the [Bug Report template](https://github.com/mrproject72/wireq/issues/new?template=bug_report.yml). Include:
 
-- mini-eq version or commit hash
+- wireq version or commit hash
 - Steps to reproduce
 - Expected vs actual behavior
 - Relevant log output (`--verbose` flag)
@@ -62,7 +62,7 @@ Use the [Bug Report template](https://github.com/mrproject72/mini-eq/issues/new?
 
 ### Suggesting Features
 
-Use the [Feature Request template](https://github.com/mrproject72/mini-eq/issues/new?template=feature_request.yml). Include:
+Use the [Feature Request template](https://github.com/mrproject72/wireq/issues/new?template=feature_request.yml). Include:
 
 - Feature title and description
 - Motivation and problem it solves
@@ -182,4 +182,4 @@ By contributing, you agree that your contributions will be licensed under the [G
 
 ## Questions?
 
-Feel free to open an issue for questions about contributing. Use the [Bug Report template](https://github.com/mrproject72/mini-eq/issues/new?template=bug_report.yml) and label it as `question`.
+Feel free to open an issue for questions about contributing. Use the [Bug Report template](https://github.com/mrproject72/wireq/issues/new?template=bug_report.yml) and label it as `question`.

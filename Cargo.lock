@@ -1475,38 +1475,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
-name = "mini-eq-rr"
-version = "0.11.0"
-dependencies = [
- "anyhow",
- "cairo-rs 0.18.5",
- "clap",
- "dbus",
- "dirs",
- "ebur128",
- "env_logger",
- "gio",
- "glib 0.22.9",
- "gtk4",
- "libadwaita",
- "libc",
- "log",
- "nix",
- "num-complex",
- "pango",
- "pipewire",
- "pipewire-native",
- "pipewire-sys",
- "regex",
- "reqwest",
- "rustfft",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3246,6 +3214,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "wireq"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "cairo-rs 0.18.5",
+ "clap",
+ "dbus",
+ "dirs",
+ "ebur128",
+ "env_logger",
+ "gio",
+ "glib 0.22.9",
+ "gtk4",
+ "libadwaita",
+ "libc",
+ "log",
+ "nix",
+ "num-complex",
+ "pango",
+ "pipewire",
+ "pipewire-native",
+ "pipewire-sys",
+ "regex",
+ "reqwest",
+ "rustfft",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

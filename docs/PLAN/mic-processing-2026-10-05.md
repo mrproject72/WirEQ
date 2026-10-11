@@ -1,7 +1,7 @@
 # Plan: microphone processing (beyond upstream)
 
 Status: **planned, not started.** This is deliberately *outside* upstream parity.
-`mini-eq` (Python, `upstream/main`) is an output-only tool: it builds one
+`wireq` (Python, `upstream/main`) is an output-only tool: it builds one
 filter-chain, feeds it the system output sink, and monitors that sink. There is
 no capture/record path anywhere in it, so nothing here has an upstream
 behaviour to copy. Treat this as new design work, not a port.

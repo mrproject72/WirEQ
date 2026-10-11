@@ -9,11 +9,11 @@ use crate::core::{APP_ID, app_data_file_path};
 
 // ── Application constants ────────────────────────────────────────────────────
 
-pub const APP_DISPLAY_NAME: &str = "Mini EQ";
+pub const APP_DISPLAY_NAME: &str = "WirEQ";
 pub const APP_ICON_NAME: &str = APP_ID;
 pub const APP_ICON_SEARCH_PATH: &str = "assets/icons";
-pub const APP_SCHEMA_NAME: &str = "io.github.mrproject72.mini_eq_rr.gschema.xml";
-pub const APP_SCHEMA_SOURCE: &str = "assets/schemas/io.github.mrproject72.mini_eq_rr.gschema.xml";
+pub const APP_SCHEMA_NAME: &str = "io.github.mrproject72.WirEQ.gschema.xml";
+pub const APP_SCHEMA_SOURCE: &str = "assets/schemas/io.github.mrproject72.WirEQ.gschema.xml";
 
 /// Escape a single argument for use in a freedesktop `.desktop` Exec line.
 pub fn quote_desktop_exec_arg(value: &str) -> String {
@@ -33,7 +33,7 @@ pub fn build_desktop_file() -> String {
         &format!("Name={}", APP_DISPLAY_NAME),
         "Keywords=equalizer;audio;pipewire;",
         "Categories=GTK;AudioVideo;Audio;",
-        &format!("Exec={}", "mini-eq-rr"),
+        &format!("Exec={}", "wireq"),
         &format!("Icon={}", APP_ICON_NAME),
         "StartupNotify=true",
         "Terminal=false",
@@ -218,7 +218,7 @@ pub fn build_native_autostart_desktop_file(command: &[String], _auto_route: bool
         "Type=Application",
         &format!("Name={}", APP_DISPLAY_NAME),
         "GenericName=System-wide Equalizer",
-        "Comment=Keep Mini EQ available in the background",
+        "Comment=Keep WirEQ available in the background",
         &format!("Exec={}", exec_line),
         &format!("Icon={}", APP_ICON_NAME),
         "Terminal=false",
@@ -231,7 +231,7 @@ pub fn build_native_autostart_desktop_file(command: &[String], _auto_route: bool
 
 #[allow(unused_imports)]
 fn _asset_path() -> std::path::PathBuf {
-    app_data_file_path("mini-eq-rr")
+    app_data_file_path("wireq")
 }
 
 #[cfg(test)]
@@ -299,7 +299,7 @@ mod tests {
     fn desktop_file_points_at_an_icon_we_ship() {
         let desktop = build_desktop_file();
         assert!(desktop.contains(&format!("Icon={APP_ICON_NAME}")));
-        assert!(desktop.contains("Exec=mini-eq-rr"));
+        assert!(desktop.contains("Exec=wireq"));
         // Icon name and Exec must agree with what we actually package.
         assert!(
             desktop.contains(&format!("StartupWMClass={APP_ID}")),
@@ -312,7 +312,7 @@ mod tests {
         let path = std::path::Path::new("assets/metainfo").join(format!("{APP_ID}.metainfo.xml"));
         let body = std::fs::read_to_string(&path).expect("metainfo readable");
         assert!(body.contains("<component type=\"desktop-application\">"));
-        assert!(body.contains("<binary>mini-eq-rr</binary>"));
+        assert!(body.contains("<binary>wireq</binary>"));
         assert!(
             body.contains(&format!("<id>{APP_ID}</id>")),
             "metainfo id must match APP_ID"

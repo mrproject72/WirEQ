@@ -22,13 +22,13 @@ pub const BACKGROUND_PORTAL_IFACE: &str = "org.freedesktop.portal.Background";
 pub const PORTAL_REQUEST_IFACE: &str = "org.freedesktop.portal.Request";
 pub const PORTAL_CALL_TIMEOUT_MS: u32 = 120_000;
 pub const PORTAL_RESPONSE_SUCCESS: u32 = 0;
-pub const AUTOSTART_FILE_NAME: &str = "io.github.mrproject72.mini_eq_rr.desktop";
+pub const AUTOSTART_FILE_NAME: &str = "io.github.mrproject72.WirEQ.desktop";
 
 // ── Executable resolution ────────────────────────────────────────────────────
 
-/// Resolve the mini-eq executable path.
-pub fn resolve_mini_eq_executable() -> anyhow::Result<String> {
-    if let Some(path) = find_in_path("mini-eq") {
+/// Resolve the wireq executable path.
+pub fn resolve_wireq_executable() -> anyhow::Result<String> {
+    if let Some(path) = find_in_path("wireq") {
         return Ok(path);
     }
     let exe = std::env::current_exe()?;
@@ -48,8 +48,8 @@ fn find_in_path(name: &str) -> Option<String> {
 
 // ── Command building ─────────────────────────────────────────────────────────
 
-/// Build the command line for running mini-eq in background mode.
-pub fn mini_eq_background_command(executable: &str, auto_route: bool) -> Vec<String> {
+/// Build the command line for running wireq in background mode.
+pub fn wireq_background_command(executable: &str, auto_route: bool) -> Vec<String> {
     let mut command = vec![executable.to_string(), "--background".to_string()];
     if auto_route {
         command.push("--auto-route".to_string());
@@ -59,8 +59,8 @@ pub fn mini_eq_background_command(executable: &str, auto_route: bool) -> Vec<Str
 
 /// Build the native autostart command (resolved executable + flags).
 pub fn native_autostart_command(auto_route: bool) -> anyhow::Result<Vec<String>> {
-    let executable = resolve_mini_eq_executable()?;
-    Ok(mini_eq_background_command(&executable, auto_route))
+    let executable = resolve_wireq_executable()?;
+    Ok(wireq_background_command(&executable, auto_route))
 }
 
 // ── Paths ────────────────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ pub fn set_native_start_at_login(
     }
 
     let command = if let Some(exe) = executable {
-        mini_eq_background_command(exe, auto_route)
+        wireq_background_command(exe, auto_route)
     } else {
         native_autostart_command(auto_route)?
     };
@@ -199,7 +199,7 @@ fn request_background_portal_flatpak(autostart: bool, auto_route: bool) -> Porta
         }
     };
 
-    let handle_token = format!("mini_eq_{}", uuid_v4_hex());
+    let handle_token = format!("wireq_{}", uuid_v4_hex());
     let sender_id = connection
         .unique_name()
         .unwrap_or_default()
@@ -218,7 +218,7 @@ fn request_background_portal_flatpak(autostart: bool, auto_route: bool) -> Porta
     options_dict.insert("handle_token", glib::Variant::from(handle_token.as_str()));
 
     if autostart {
-        let command = mini_eq_background_command("mini-eq", auto_route);
+        let command = wireq_background_command("wireq", auto_route);
         let strv: Vec<&str> = command.iter().map(|s| s.as_str()).collect();
         let variant_array = glib::Variant::array_from_iter::<glib::Variant>(
             strv.iter().map(|s| glib::Variant::from(*s)),

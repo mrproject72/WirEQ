@@ -57,7 +57,7 @@ variants), `output_monitor_sink` / `set_output_monitor_sink`, plus the
 
 ## D-Bus: output_mode, output_preset, monitor_sink
 
-`MiniEqAppHandler` gains `output_mode`, `output_preset`, `monitor_sink`, and
+`WirEqAppHandler` gains `output_mode`, `output_preset`, `monitor_sink`, and
 `set_output_mode`; `SetOutputMode` is a new method (`s` argument, the same
 `selected`/`reroute` values the UI buttons use); `output_mode`,
 `output_preset` and `monitor_sink` are published in `GetState`; the

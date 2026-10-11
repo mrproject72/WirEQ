@@ -22,7 +22,7 @@ Two independent decisions are being expressed by one switch and one dropdown:
 | Axis | Controlled by | What it does |
 |---|---|---|
 | Which streams are fed into the EQ | `route_switch` → `RoutingEngine::auto_route_to_sink` | pulls in every eligible stream, whatever device it was on |
-| Where the chain plays out | the Output dropdown → the chain's destination | moves `mini_eq_sink_output` only; touches no stream |
+| Where the chain plays out | the Output dropdown → the chain's destination | moves `wireq_sink_output` only; touches no stream |
 
 With the switch off, the first axis does nothing, so the second has no audible
 effect: the dropdown looks broken. That is the whole confusion, and it is why
@@ -179,7 +179,7 @@ caused the confusion.
 
 ## Persistence
 
-`~/.config/mini-eq/output-presets.json` gains, alongside `links` and `default`:
+`~/.config/wireq/output-presets.json` gains, alongside `links` and `default`:
 
 ```json
 { "links": {...}, "default": "...", "mode": "selected", "monitor": "follow",

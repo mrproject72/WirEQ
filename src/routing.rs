@@ -153,7 +153,7 @@ pub struct RoutingEngine {
     ///
     /// Distinct from `current_sink`, which `auto_route_to_sink` points at the
     /// VIRTUAL sink (the streams' entry point) while routing is on. Reading
-    /// the monitor tap from `current_sink` therefore resolved to `mini_eq_sink`
+    /// the monitor tap from `current_sink` therefore resolved to `wireq_sink`
     /// itself whenever the EQ was on -- the monitor listened to the virtual
     /// sink instead of the device, and a device switch followed by re-enable
     /// left it there. Only physical sinks are recorded here.
@@ -416,7 +416,7 @@ impl RoutingEngine {
         // Record the chain's physical destination for the monitor resolve
         // path. ANY of our virtual sinks (legacy or per-device) is the
         // streams' entry point, not the device being equalised -- recording
-        // one sends the monitor to `mini_eq_sink*` itself instead of the
+        // one sends the monitor to `wireq_sink*` itself instead of the
         // device. No physical sink starts with our prefix (pinned by unit
         // test), so the prefix check is the correct guard.
         if !sink_name.starts_with(VIRTUAL_SINK_BASE) {
@@ -718,7 +718,7 @@ impl RoutingEngine {
                     n != sink_name
                         && Some(n.as_str()) != default_name
                         && !n.starts_with(crate::core::VIRTUAL_SINK_BASE)
-                        && !n.starts_with("mini-eq-analyzer")
+                        && !n.starts_with("wireq-analyzer")
                 })
             });
             if linked_elsewhere {
@@ -732,7 +732,7 @@ impl RoutingEngine {
     /// pointed at a device the user chose.
     ///
     /// Upstream `iter_routable_output_streams`.
-    /// The id of our own filter-chain output stream, `mini_eq_sink_output`.
+    /// The id of our own filter-chain output stream, `wireq_sink_output`.
     ///
     /// Upstream `output_stream_by_name(filter_output_name)`. This is the stream
     /// whose target decides where the EQ chain plays out, and moving it is the
@@ -949,7 +949,7 @@ impl RoutingEngine {
     /// `current_sink` at the physical sink) and then switching the EQ off
     /// leaves EQ-pointed streams behind: under Selected they are out of scope
     /// for the physical sink, so the restore never sees them and they keep
-    /// pointing at `mini_eq_sink` -- audio stops when the app exits. A re-route
+    /// pointing at `wireq_sink` -- audio stops when the app exits. A re-route
     /// then records the EQ target as "where it came from", cementing it.
     /// Reproduced by tests-live/live_test.sh (T7-off restored 0 streams).
     pub fn restorable_output_streams(&self) -> Vec<StreamNode> {
@@ -2153,7 +2153,7 @@ impl RoutingEngine {
     /// re-route that follows the rebuild still knows these streams are ours and
     /// still knows where each one came from.
     ///
-    /// Needed because a filter-chain reload destroys `mini_eq_sink`: streams
+    /// Needed because a filter-chain reload destroys `wireq_sink`: streams
     /// left pointed at it are pointed at nothing, and WirePlumber's recovery
     /// from that is both slower and less predictable than a deliberate
     /// live-to-live move.
@@ -2293,7 +2293,7 @@ impl RoutingEngine {
             // Never record our own virtual sink as the origin: a stream that
             // is already EQ-pointed (failed unroute, previous instance) would
             // otherwise cement the EQ target as "where it came from" and keep
-            // pointing at `mini_eq_sink` past unroute and quit.
+            // pointing at `wireq_sink` past unroute and quit.
             {
                 let mut recorded = self.routed_targets.lock().unwrap();
                 if !recorded.contains_key(node_id) {
@@ -3224,9 +3224,9 @@ mod tests {
     /// Our own virtual sink must never appear as a selectable output device.
     #[test]
     fn virtual_sink_is_excluded_by_prefix() {
-        assert!(VIRTUAL_SINK_BASE.starts_with("mini_eq"));
-        assert!("mini_eq_sink".starts_with(VIRTUAL_SINK_BASE));
-        assert!("mini_eq_sink.source".starts_with(VIRTUAL_SINK_BASE));
+        assert!(VIRTUAL_SINK_BASE.starts_with("wireq"));
+        assert!("wireq_sink".starts_with(VIRTUAL_SINK_BASE));
+        assert!("wireq_sink.source".starts_with(VIRTUAL_SINK_BASE));
         // A real device must not be caught by the filter.
         assert!(!"alsa_output.pci-0000_04_00.6.analog-stereo".starts_with(VIRTUAL_SINK_BASE));
     }
@@ -3404,7 +3404,7 @@ mod tests {
     #[test]
     fn output_routing_mode_roundtrips() {
         let path = std::env::temp_dir()
-            .join("mini-eq-test")
+            .join("wireq-test")
             .join("output-presets-mode.json");
         let _ = std::fs::remove_file(&path);
 
