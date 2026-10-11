@@ -49,8 +49,8 @@ jobs:
       - name: Upload release binary
         uses: actions/upload-artifact@v4
         with:
-          name: mini-eq-rr-linux-x86_64
-          path: target/release/mini-eq-rr
+          name: wireq-linux-x86_64
+          path: target/release/wireq
   flatpak:
     runs-on: ubuntu-latest
     container:
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: mini-eq-rr.flatpak
+          bundle: wireq.flatpak
           manifest-path: io.github.mrproject72.WirEQ.yml
           cache: true
           cache-key: flatpak-builder-${{ github.sha }}
