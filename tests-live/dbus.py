@@ -50,7 +50,11 @@ def main():
         import re
         text = r.stdout.strip()
         # entries look like 'key': <value> ; values may contain , inside []
-        for m in re.finditer(r"'(\w+)': <((?:[^<>]|\[[^\]]*\])*)>", text):
+        # The alternation is disjoint on purpose (a '[' can only start the
+        # bracket alternative, never the run of plain chars), which makes the
+        # match linear -- the ambiguous form was flagged by CodeQL as
+        # potential exponential backtracking.
+        for m in re.finditer(r"'(\w+)': <((?:[^<>\[\]]|\[[^\]\[]*\])*)>", text):
             v = m.group(2).strip()
             if v.startswith("'") and v.endswith("'"):
                 v = v[1:-1]
