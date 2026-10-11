@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Regenerate the hicolor icon set from the master artwork.
 
-Source of truth: `mini_eq_rr_icon_final.png` (1600x1600 RGBA).
+Source of truth: `wireq_icon_final.png` (1600x1600 RGBA).
 
 Produces, for each size in SIZES:
-  assets/icons/<N>x<N>/apps/io.github.mrproject72.mini_eq_rr.png
-  assets/icons/<N>x<N>/apps/io.github.mrproject72.mini_eq_rr-symbolic.png
+  assets/icons/<N>x<N>/apps/io.github.mrproject72.WirEQ.png
+  assets/icons/<N>x<N>/apps/io.github.mrproject72.WirEQ-symbolic.png
 
 Run from the repository root after replacing the master artwork:
 
@@ -68,9 +68,9 @@ except ImportError:
     sys.exit("numpy is required: pip install numpy")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-NAME = "io.github.mrproject72.mini_eq_rr"
+NAME = "io.github.mrproject72.WirEQ"
 SIZES = [16, 24, 32, 48, 64, 128, 256, 512]
-SOURCE = os.path.join(HERE, "mini_eq_rr_icon_final.png")
+SOURCE = os.path.join(HERE, "wireq_icon_final.png")
 
 
 def load_png(path):

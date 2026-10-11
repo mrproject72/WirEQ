@@ -1,0 +1,12 @@
+[Desktop Entry]
+GenericName=System-wide Equalizer
+Comment=System-wide parametric equalizer for PipeWire
+Name=WirEQ
+Keywords=equalizer;audio;pipewire;
+Categories=GTK;AudioVideo;Audio;
+Exec=wireq
+Icon=io.github.mrproject72.WirEQ
+StartupNotify=true
+Terminal=false
+Type=Application
+StartupWMClass=io.github.mrproject72.WirEQ

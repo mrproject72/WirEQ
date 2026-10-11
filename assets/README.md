@@ -2,7 +2,7 @@
 
 ## Icons
 
-Master artwork: `mini_eq_rr_icon_final.png` (1600×1600 RGBA).
+Master artwork: `wireq_icon_final.png` (1600×1600 RGBA).
 
 `icons/` is **generated** — do not edit those files by hand. After replacing the
 master artwork, regenerate everything with:
@@ -14,8 +14,8 @@ python3 assets/generate-icons.py
 That writes, for each of 16, 24, 32, 48, 64, 128, 256 and 512 px:
 
 ```
-icons/<N>x<N>/apps/io.github.mrproject72.mini_eq_rr.png
-icons/<N>x<N>/apps/io.github.mrproject72.mini_eq_rr-symbolic.png
+icons/<N>x<N>/apps/io.github.mrproject72.WirEQ.png
+icons/<N>x<N>/apps/io.github.mrproject72.WirEQ-symbolic.png
 ```
 
 `parametric_eq_mixer_icon.png` is the earlier draft of the same design (softer
@@ -75,6 +75,6 @@ resampling one, so it has not been done here.
 
 ## AppStream metadata
 
-`metainfo/io.github.mrproject72.mini_eq_rr.metainfo.xml` — required by the
+`metainfo/io.github.mrproject72.WirEQ.metainfo.xml` — required by the
 deb, rpm and Flatpak packages for software centres to show the application.
 `<id>` must match `core::APP_ID`.

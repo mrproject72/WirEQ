@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.mrproject72.mini_eq_rr</id>
+  <id>io.github.mrproject72.WirEQ</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
 
-  <name>Mini EQ</name>
+  <name>WirEQ</name>
   <summary>System-wide parametric equalizer for PipeWire</summary>
 
   <description>
     <p>
-      Mini EQ is a small system-wide parametric equalizer for PipeWire. It creates
+      WirEQ is a small system-wide parametric equalizer for PipeWire. It creates
       a virtual sink, routes playback through a per-band biquad filter chain, and
       carries that chain's output on to the real sound card, so the curve applies
       to everything the system plays rather than to one application.
@@ -26,9 +26,9 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">io.github.mrproject72.mini_eq_rr.desktop</launchable>
+  <launchable type="desktop-id">io.github.mrproject72.WirEQ.desktop</launchable>
 
-  <icon type="stock">io.github.mrproject72.mini_eq_rr</icon>
+  <icon type="stock">io.github.mrproject72.WirEQ</icon>
 
   <categories>
     <category>AudioVideo</category>
@@ -46,7 +46,7 @@
   </keywords>
 
   <provides>
-    <binary>mini-eq-rr</binary>
+    <binary>wireq</binary>
   </provides>
 
   <url type="homepage">https://github.com/mrproject72/mini-eq-RR</url>
