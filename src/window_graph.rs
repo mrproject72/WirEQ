@@ -112,6 +112,9 @@ pub struct GraphPalette {
     pub inactive_point: (f64, f64, f64),
     pub response: (f64, f64, f64),
     pub disabled_response: (f64, f64, f64),
+    /// The selected band's own contribution curve (upstream
+    /// `selected_response`).
+    pub selected_response: (f64, f64, f64),
 }
 
 impl GraphPalette {
@@ -139,6 +142,7 @@ impl GraphPalette {
                 inactive_point: (0.44, 0.50, 0.57),
                 response: RESPONSE_AMBER,
                 disabled_response: (0.58, 0.64, 0.72),
+                selected_response: (0.50, 0.80, 0.98),
             }
         } else {
             Self {
@@ -153,6 +157,7 @@ impl GraphPalette {
                 analyzer_grid: (0.04, 0.42, 0.58),
                 analyzer_label: (0.02, 0.34, 0.50),
                 monitor_label: (0.02, 0.36, 0.54),
+                selected_response: (0.02, 0.34, 0.62),
                 selected_line: (0.02, 0.30, 0.56, 0.18),
                 selected_point: (0.02, 0.30, 0.56),
                 selected_halo: (0.02, 0.36, 0.68),
@@ -281,6 +286,11 @@ pub struct EqGraph {
     pub background_area: gtk4::DrawingArea,
     pub analyzer_area: gtk4::DrawingArea,
     pub response_area: gtk4::DrawingArea,
+    /// The focus row under the graph (upstream `focus_label` +
+    /// `band_count_label`): the selected band's summary, right-aligned, and
+    /// the visible band count.
+    pub focus_label: gtk4::Label,
+    pub band_count_label: gtk4::Label,
     /// Output-monitor on/off switch, placed in the graph header (right of the
     /// "Frequency Response" title) so it sits directly above the spectrum.
     pub monitor_switch: gtk4::Switch,
@@ -351,6 +361,22 @@ impl EqGraph {
         container.set_css_classes(&["graph-shell-panel"]);
         container.set_margin_bottom(8);
 
+        let focus_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        let band_count_label = gtk4::Label::new(Some(""));
+        band_count_label.set_halign(gtk4::Align::Start);
+        band_count_label.set_valign(gtk4::Align::Center);
+        band_count_label.set_css_classes(&["dimmed", "caption"]);
+        let focus_label = gtk4::Label::new(Some(""));
+        focus_label.set_halign(gtk4::Align::End);
+        focus_label.set_valign(gtk4::Align::Center);
+        focus_label.set_css_classes(&["caption"]);
+        focus_row.set_hexpand(true);
+        focus_row.append(&band_count_label);
+        let focus_spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        focus_spacer.set_hexpand(true);
+        focus_row.append(&focus_spacer);
+        focus_row.append(&focus_label);
+
         let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         let title = gtk4::Label::new(Some("Frequency Response"));
         title.set_css_classes(&["heading"]);
@@ -376,6 +402,7 @@ impl EqGraph {
         header.set_hexpand(true);
         container.append(&header);
         container.append(&overlay);
+        container.append(&focus_row);
 
         Self {
             container,
@@ -383,6 +410,8 @@ impl EqGraph {
             background_area,
             analyzer_area,
             response_area,
+            focus_label,
+            band_count_label,
             monitor_switch,
             header,
             header_spacer,
@@ -857,6 +886,93 @@ impl EqGraph {
             crate::core::SAMPLE_RATE,
             &frequencies,
         );
+
+        // The gradient area fill between the curve and the 0 dB baseline
+        // (upstream draw_graph_response_overlay): amber, brighter while the
+        // EQ is enabled, dimmed while bypassed.
+        if !response.is_empty() {
+            let base_y = db_to_y(0.0, height, top, bottom);
+            ctx.move_to(left, base_y);
+            for (i, &db) in response.iter().enumerate() {
+                ctx.line_to(left + i as f64, db_to_y(db, height, top, bottom));
+            }
+            ctx.line_to(left + (response.len() - 1) as f64, base_y);
+            ctx.close_path();
+            let gradient = gtk4::cairo::LinearGradient::new(0.0, top, 0.0, height - bottom);
+            gradient.add_color_stop_rgba(
+                0.0,
+                palette.response.0,
+                palette.response.1,
+                palette.response.2,
+                if eq_enabled { 0.24 } else { 0.10 },
+            );
+            gradient.add_color_stop_rgba(
+                1.0,
+                palette.response.0,
+                palette.response.1,
+                palette.response.2,
+                if eq_enabled { 0.02 } else { 0.01 },
+            );
+            ctx.set_source(&gradient).unwrap();
+            ctx.fill().unwrap();
+        }
+
+        // The selected band's own contribution curve (upstream
+        // selected_response_points): just that band's response at 0 dB
+        // preamp, only while the band is effective (not solo-muted).
+        if let Some(index) = selected_band
+            && let Some(band) = bands.get(index)
+            && crate::core::band_is_effective(band, solo_active)
+        {
+            let single = crate::core::total_response_db_at_frequencies(
+                std::slice::from_ref(band),
+                0.0,
+                crate::core::SAMPLE_RATE,
+                &frequencies,
+            );
+            ctx.set_source_rgba(
+                palette.selected_response.0,
+                palette.selected_response.1,
+                palette.selected_response.2,
+                if eq_enabled { 0.28 } else { 0.12 },
+            );
+            ctx.set_line_width(1.4);
+            let mut started = false;
+            for (i, &db) in single.iter().enumerate() {
+                let y = db_to_y(db, height, top, bottom);
+                if started {
+                    ctx.line_to(left + i as f64, y);
+                } else {
+                    ctx.move_to(left, y);
+                    started = true;
+                }
+            }
+            ctx.stroke().unwrap();
+        }
+
+        // The low-alpha glow under the main curve (upstream: a 6 px stroke).
+        ctx.set_source_rgba(
+            palette.response.0,
+            palette.response.1,
+            palette.response.2,
+            if eq_enabled { 0.12 } else { 0.06 },
+        );
+        ctx.set_line_width(6.0);
+        let mut started = false;
+        for (i, &db) in response.iter().enumerate() {
+            let y = db_to_y(db, height, top, bottom);
+            if started {
+                ctx.line_to(left + i as f64, y);
+            } else {
+                ctx.move_to(left, y);
+                started = true;
+            }
+        }
+        ctx.stroke().unwrap();
+
+        // The main curve: amber while the EQ is enabled, grey + the
+        // disabled_response while bypassed, so the A/B switch is visible in
+        // the graph itself.
         let (curve_r, curve_g, curve_b) = if eq_enabled {
             palette.response
         } else {

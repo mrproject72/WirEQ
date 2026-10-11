@@ -97,14 +97,53 @@ fn edit_fader(
 
 /// Mirror `solo_active` onto every fader: upstream computes it once from the
 /// whole band list (`bands_have_solo`) and hands it to each `set_band_state`.
+/// The focus-row summary under the graph (upstream `update_focus_summary`):
+/// `Band 3 • 1.0k • +6.0 dB`, or empty when nothing is selected.
+fn focus_summary_text(
+    faders: &[Rc<RefCell<crate::band_fader::EqBandFader>>],
+    selected: Option<usize>,
+) -> String {
+    let Some(index) = selected else {
+        return String::new();
+    };
+    let Some(fader) = faders.iter().find(|f| f.borrow().index == index) else {
+        return String::new();
+    };
+    let f = fader.borrow();
+    if f.muted {
+        return format!("Band {} • {} • muted", index + 1, f.frequency_label);
+    }
+    let gain = f.gain_db;
+    format!(
+        "Band {} • {} • {}{:.1} dB",
+        index + 1,
+        f.frequency_label,
+        if gain >= 0.0 { "+" } else { "" },
+        gain
+    )
+}
+
 fn recompute_solo_active(faders: &[Rc<RefCell<crate::band_fader::EqBandFader>>]) {
     let solo_active = faders.iter().any(|fader| fader.borrow().soloed);
     for fader in faders.iter() {
         let mut fader = fader.borrow_mut();
+        // Solo dimming (upstream `update_quick_fader_strip`): a fader whose
+        // band is muted by someone else's solo is visually de-emphasised.
+        // `solo_active` on the fader itself means "this band is soloed"
+        // which is always effective.
+        let muted_by_solo = solo_active && !fader.soloed;
+        let mut classes: Vec<&str> = vec!["eq-band-box"];
+        if fader.selected {
+            classes.push("eq-band-box-selected");
+        }
+        if muted_by_solo {
+            classes.push("eq-band-box-muted");
+        }
+        fader.container.set_css_classes(&classes);
         if fader.solo_active != solo_active {
             fader.solo_active = solo_active;
-            fader.drawing_area.queue_draw();
         }
+        fader.drawing_area.queue_draw();
     }
 }
 
@@ -1208,6 +1247,79 @@ impl MiniEqWindow {
             let backend = backend.clone();
             let engine_sink = engine_sink.clone();
             let monitor_loudness_value = utility.monitor.loudness_value.clone();
+            let monitor_loudness_meter = utility.monitor.loudness_meter.clone();
+            // Session-max short-term LUFS for the meter marker (upstream
+            // `analyzer_session_max_shortterm_lufs`).
+            let lufs_session_max: Rc<std::cell::Cell<f64>> =
+                Rc::new(std::cell::Cell::new(f64::NEG_INFINITY));
+            // The meter's displayed state: (current, session_max) -- repaint
+            // only when either moves (the paint-on-demand rule).
+            let meter_draw_state: Rc<RefCell<(f64, f64)>> =
+                Rc::new(RefCell::new((f64::NEG_INFINITY, f64::NEG_INFINITY)));
+            {
+                let meter_draw_state = meter_draw_state.clone();
+                monitor_loudness_meter.set_draw_func(move |_area, ctx, width, height| {
+                    let width = width.max(1) as f64;
+                    let height = height.max(1) as f64;
+                    let track_height = (height - 6.0).clamp(4.0, 7.0);
+                    let track_y = (height - track_height) / 2.0;
+                    let radius = track_height / 2.0;
+                    // -60..0 LUFS mapped to 0..1 (upstream loudness_meter_norm).
+                    let norm = |v: f64| -> f64 {
+                        if v.is_finite() {
+                            ((v + 60.0) / 60.0).clamp(0.0, 1.0)
+                        } else {
+                            0.0
+                        }
+                    };
+                    let (current, session_max) = *meter_draw_state.borrow();
+                    let dark = crate::appearance::style_manager_is_dark();
+                    let (track, fill, marker) = if dark {
+                        (
+                            (1.0, 1.0, 1.0, 0.08),
+                            (0.33, 0.78, 0.90, 0.70),
+                            (0.97, 0.99, 1.0, 0.98),
+                        )
+                    } else {
+                        (
+                            (0.03, 0.10, 0.16, 0.12),
+                            (0.03, 0.46, 0.60, 0.62),
+                            (0.08, 0.13, 0.18, 0.92),
+                        )
+                    };
+                    use std::f64::consts::{FRAC_PI_2, PI};
+                    let rounded_rect =
+                        |ctx: &gtk4::cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64| {
+                            ctx.new_sub_path();
+                            ctx.arc(x + w - r, y + r, r, -FRAC_PI_2, 0.0);
+                            ctx.arc(x + w - r, y + h - r, r, 0.0, FRAC_PI_2);
+                            ctx.arc(x + r, y + h - r, r, FRAC_PI_2, PI);
+                            ctx.arc(x + r, y + r, r, PI, PI + FRAC_PI_2);
+                            ctx.close_path();
+                        };
+                    rounded_rect(ctx, 0.0, track_y, width, track_height, radius);
+                    ctx.set_source_rgba(track.0, track.1, track.2, track.3);
+                    ctx.fill().unwrap();
+                    let current_x = width * norm(current);
+                    if current_x > 0.5 {
+                        ctx.save().unwrap();
+                        rounded_rect(ctx, 0.0, track_y, width, track_height, radius);
+                        ctx.clip();
+                        ctx.rectangle(0.0, track_y, current_x, track_height);
+                        ctx.set_source_rgba(fill.0, fill.1, fill.2, fill.3);
+                        ctx.fill().unwrap();
+                        ctx.restore().unwrap();
+                    }
+                    if session_max.is_finite() {
+                        let marker_x = width * norm(session_max);
+                        ctx.set_source_rgba(marker.0, marker.1, marker.2, marker.3);
+                        ctx.set_line_width(1.4);
+                        ctx.move_to(marker_x, track_y - 2.0);
+                        ctx.line_to(marker_x, track_y + track_height + 2.0);
+                        ctx.stroke().unwrap();
+                    }
+                });
+            }
             let monitor_summary = utility.monitor.summary.clone();
             // Shared Freeze state. The spectrum is the graph overlay and the
             // loudness readout lives in the monitor strip, so freezing has to
@@ -1311,6 +1423,7 @@ impl MiniEqWindow {
             // for the tick's remote-command drain (the originals live at
             // function scope for the switch handlers).
             let device_curve_memory_tick = device_curve_memory.clone();
+            let graph_handle_for_focus = utility.graph.clone();
             let snapshot_device_curve_tick = snapshot_device_curve.clone();
             let restore_device_curve_tick = restore_device_curve.clone();
 
@@ -1450,6 +1563,24 @@ impl MiniEqWindow {
                 // Publish what the D-Bus interface reports, reusing the levels
                 // already read above rather than asking the backend twice.
                 // `visible` is derived rather than tracked so it cannot drift.
+                // The focus row under the graph: the selected band's
+                // summary + the visible band count (upstream
+                // `update_focus_summary` / the band-count chip).
+                let selected_index = band_faders
+                    .iter()
+                    .find(|f| f.borrow().selected)
+                    .map(|f| f.borrow().index);
+                let focus = focus_summary_text(&band_faders, selected_index);
+                if graph_handle_for_focus.borrow().focus_label.text() != focus {
+                    graph_handle_for_focus.borrow().focus_label.set_text(&focus);
+                }
+                let count_text = format!("{} Bands", band_faders.len());
+                if graph_handle_for_focus.borrow().band_count_label.text() != count_text {
+                    graph_handle_for_focus
+                        .borrow()
+                        .band_count_label
+                        .set_text(&count_text);
+                }
                 let output_preset_for_state =
                     crate::core::output_preset_for_sink(&engine_sink.borrow());
                 let monitor_sink_for_state = crate::core::output_monitor_sink();
@@ -1616,6 +1747,19 @@ impl MiniEqWindow {
                                 if monitor_loudness_value.text() != lufs_text {
                                     monitor_loudness_value.set_text(&lufs_text);
                                     monitor_summary.set_text(&format!("On \u{00b7} {lufs_text}"));
+                                }
+                                // The LUFS meter bar: the fill tracks the
+                                // short-term value, the marker the session max
+                                // (upstream on_loudness_meter_draw).
+                                let max_seen = lufs_session_max.get().max(lufs);
+                                lufs_session_max.set(max_seen);
+                                {
+                                    let mut st = meter_draw_state.borrow_mut();
+                                    if (st.0 - lufs).abs() > 0.05 || (st.1 - max_seen).abs() > 0.05
+                                    {
+                                        *st = (lufs, max_seen);
+                                        monitor_loudness_meter.queue_draw();
+                                    }
                                 }
                             }
                         }

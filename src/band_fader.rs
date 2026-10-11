@@ -176,6 +176,16 @@ impl EqBandFader {
             drag.connect_begin(move |_gesture, _event_seq| {
                 let mut f = f1.borrow_mut();
                 f.drag_start_gain_db = f.gain_db;
+                // Upstream band_fader.py:549: a drag begins by selecting the
+                // band, so the editor and the graph follow the fader.
+                if !f.selected {
+                    if let Some(cb) = f.selection_changed_callback.clone() {
+                        let index = f.index;
+                        drop(f);
+                        cb(index);
+                        return;
+                    }
+                }
                 f.drawing_area.queue_draw();
             });
             drag.connect_drag_update(move |gesture, _offset_x, offset_y| {
@@ -239,6 +249,12 @@ impl EqBandFader {
                 let state = _controller.current_event_state();
                 let (index, cb, current) = {
                     let f = fader_clone.borrow();
+                    // Upstream: a scroll also selects the band.
+                    if !f.selected
+                        && let Some(cb) = f.selection_changed_callback.clone()
+                    {
+                        cb(f.index);
+                    }
                     (f.index, f.gain_changed_callback.clone(), f.gain_db)
                 };
                 let step = direct_step_for_state(state);

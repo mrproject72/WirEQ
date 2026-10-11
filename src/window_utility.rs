@@ -85,6 +85,9 @@ pub struct MonitorControls {
     /// Output page (LUFS value + one-line status).
     pub readout: gtk4::Box,
     pub loudness_value: gtk4::Label,
+    /// The LUFS meter bar (upstream `on_loudness_meter_draw`): the rounded
+    /// track, the short-term fill and the session-max marker.
+    pub loudness_meter: gtk4::DrawingArea,
     pub summary: gtk4::Label,
     /// Set by the Freeze switch. The update loop stops feeding new frames to
     /// the spectrum overlay and the loudness readout while it is set, matching
@@ -458,6 +461,11 @@ impl UtilityPane {
         detail_row.append(&loudness_value);
         readout.append(&detail_row);
 
+        let loudness_meter = gtk4::DrawingArea::new();
+        loudness_meter.set_height_request(12);
+        loudness_meter.set_hexpand(true);
+        readout.append(&loudness_meter);
+
         let summary_label = gtk4::Label::new(Some("Monitor off"));
         summary_label.set_css_classes(&["monitor-summary-label"]);
         summary_label.set_halign(gtk4::Align::Start);
@@ -467,6 +475,7 @@ impl UtilityPane {
             settings_button,
             readout,
             loudness_value,
+            loudness_meter,
             summary: summary_label,
             smoothing_scale,
             smoothing_value,
