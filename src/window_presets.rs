@@ -14,8 +14,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use adw::prelude::AdwDialogExt as _;
-use gtk4::prelude::*;
+use adw::prelude::*;
 
 use crate::autoeq::parse_apo_file;
 use crate::core::{
@@ -187,23 +186,64 @@ impl PresetPanel {
             // let the user actually name the preset.
             let panel_for_state = panel_clone.clone();
             let suggested = format!("preset_{}", count_custom_children(&list_box) + 1);
-            prompt_preset_name("Save Preset", "Save", &suggested, move |name| {
-                let sanitized = sanitize_preset_name(&name);
-                let path = preset_path_for_name(&sanitized);
-                if let Err(e) = save_preset_to_file(&path, &bands, preamp) {
-                    log::warn!("Save preset {sanitized}: {e}");
-                    return;
+            // The commit half of the save: write the file and make the saved
+            // state current (the state chip reads "saved" afterwards).
+            let commit = {
+                let panel_for_state = panel_for_state.clone();
+                let list_box = list_box.clone();
+                move |sanitized: String, bands: Vec<crate::core::EqBand>, preamp: f64| {
+                    let path = preset_path_for_name(&sanitized);
+                    if let Err(e) = save_preset_to_file(&path, &bands, preamp) {
+                        log::warn!("Save preset {sanitized}: {e}");
+                        return;
+                    }
+                    // What was just written is now the current state, so the
+                    // state chip reads "saved" instead of "modified".
+                    {
+                        let mut p = panel_for_state.borrow_mut();
+                        p.current_bands = bands.clone();
+                        p.current_preamp_db = preamp;
+                        p.current_preset_name = Some(sanitized.clone());
+                        p.saved_signature = Some(p.signature_of_current());
+                    }
+                    refresh_preset_list(&list_box);
                 }
-                // What was just written is now the current state, so the state
-                // chip reads "saved" instead of "modified".
-                {
-                    let mut p = panel_for_state.borrow_mut();
-                    p.current_bands = bands.clone();
-                    p.current_preamp_db = preamp;
-                    p.current_preset_name = Some(sanitized.clone());
-                    p.saved_signature = Some(p.signature_of_current());
+            };
+            prompt_preset_name("Save Preset", "Save", &suggested, {
+                let commit = commit.clone();
+                let bands = bands.clone();
+                move |name| {
+                    let sanitized = sanitize_preset_name(&name);
+                    let path = preset_path_for_name(&sanitized);
+                    // Overwriting an existing preset needs a confirmation
+                    // (upstream confirm_preset_replacement).
+                    if path.exists() {
+                        let confirm = adw::AlertDialog::new(
+                            Some("Replace preset?"),
+                            Some(&format!(
+                                "{sanitized} already exists. Replace it with the current curve?"
+                            )),
+                        );
+                        confirm.add_response("cancel", "Cancel");
+                        confirm.add_response("replace", "Replace");
+                        confirm.set_response_appearance(
+                            "replace",
+                            adw::ResponseAppearance::Destructive,
+                        );
+                        confirm.connect_response(None, {
+                            let commit = commit.clone();
+                            let bands = bands.clone();
+                            move |_d, response| {
+                                if response == "replace" {
+                                    commit(sanitized.clone(), bands.clone(), preamp);
+                                }
+                            }
+                        });
+                        confirm.present(None::<&gtk4::Window>);
+                    } else {
+                        commit(sanitized, bands.clone(), preamp);
+                    }
                 }
-                refresh_preset_list(&list_box);
             });
         });
 
@@ -289,8 +329,38 @@ impl PresetPanel {
                 // Built-in presets cannot be removed; ignore.
                 return;
             }
-            let _ = crate::core::delete_preset_file(&name);
-            refresh_preset_list(&list_box);
+            // Delete confirmation (upstream on_preset_delete_dialog_done):
+            // the curve is KEPT -- only the file goes away.
+            let confirm = adw::AlertDialog::new(
+                Some("Delete preset?"),
+                Some(&format!("Delete {name}? The curve stays in the editor.")),
+            );
+            confirm.add_response("cancel", "Cancel");
+            confirm.add_response("delete", "Delete");
+            confirm.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+            confirm.connect_response(None, {
+                let list_box = list_box.clone();
+                let panel = panel_clone.clone();
+                move |_d, response| {
+                    if response != "delete" {
+                        return;
+                    }
+                    let _ = crate::core::delete_preset_file(&name);
+                    {
+                        let mut p = panel.borrow_mut();
+                        // The deleted preset was the current one: the curve
+                        // stays but nothing is saved any more (upstream
+                        // keep_current_curve_as_unsaved_copy).
+                        if p.current_preset_name.as_deref() == Some(name.as_str()) {
+                            p.current_preset_name = None;
+                            p.saved_signature = None;
+                        }
+                        p.update_state_chip();
+                    }
+                    refresh_preset_list(&list_box);
+                }
+            });
+            confirm.present(None::<&gtk4::Window>);
         });
 
         // --- Import: APO file -> new custom preset.
