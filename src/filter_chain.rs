@@ -755,6 +755,105 @@ mod tests {
         assert!(!raw_links.contains("_filter:In"));
     }
 
+    /// The complete push set at 10 active bands: 112 controls (the preamp
+    /// b0..a2 for both sides + every band's Freq/Q/Gain and the mixer
+    /// Gain 1/2 for both sides). Matches the "pushed 112 control(s)"
+    /// device_push_live log line -- the count is part of the wire contract.
+    #[test]
+    fn native_control_set_covers_the_full_push() {
+        // Runtime pushes only the active fader set (chain.bands holds the
+        // fader snapshot, 10 bands by default), not all 32 slots.
+        let bands = &default_bands()[..crate::core::DEFAULT_ACTIVE_BANDS];
+        let controls = native_biquad_control_values(bands, 0.0, true);
+        assert_eq!(controls.len(), 112, "10 bands + the preamp, both sides");
+
+        let names: Vec<&str> = controls.iter().map(|(k, _)| k.as_str()).collect();
+        // The preamp raw coefficients, both sides.
+        for side in ["l", "r"] {
+            for coeff in ["b0", "b1", "b2", "a0", "a1", "a2"] {
+                assert!(
+                    names.contains(&format!("preamp_{side}:{coeff}").as_str()),
+                    "preamp_{side}:{coeff} missing"
+                );
+            }
+        }
+        // Every band: the filter Freq/Q/Gain + the mixer crossfade.
+        for index in 0..10 {
+            for side in ["l", "r"] {
+                for suffix in [
+                    "_filter:Freq",
+                    "_filter:Q",
+                    "_filter:Gain",
+                    ":Gain 1",
+                    ":Gain 2",
+                ] {
+                    assert!(
+                        names.contains(&format!("band_{side}_{index}{suffix}").as_str()),
+                        "band_{side}_{index}{suffix} missing"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The wire bytes must round-trip the computed controls: parse the pod
+    /// back and compare. Guards the Double-vs-Float class of regression (the
+    /// flatpak push was dead because the pod carried 8-byte Doubles where
+    /// the DSP struct parser pairs (String, Float) strictly).
+    #[test]
+    fn wire_bytes_round_trip_the_control_values() {
+        let bands = &default_bands()[..crate::core::DEFAULT_ACTIVE_BANDS];
+        let controls = native_biquad_control_values(bands, 0.0, true);
+        let data = crate::pipewire_backend::build_props_controls_pod_bytes(&controls)
+            .expect("pod should build");
+
+        // Walk the pod struct: (String, Float) pairs in order.
+        let pod = crate::pipewire_backend::parse_props_controls_pod(&data)
+            .expect("the wire bytes should parse");
+        assert_eq!(pod.len(), controls.len(), "control count mismatch");
+        for ((name_out, value_out), (name_in, value_in)) in pod.iter().zip(&controls) {
+            assert_eq!(name_out, name_in, "control name mismatch");
+            // The wire carries f32 (upstream casts to float before building
+            // the pod), so the exact round-trip contract is f32 equality.
+            assert_eq!(
+                *value_out as f32, *value_in as f32,
+                "value mismatch for {name_in}: {value_out} vs {value_in}"
+            );
+        }
+    }
+
+    /// The bypass pushes the identity everywhere: every mixer fully dry,
+    /// every filter neutral, the preamp neutral.
+    #[test]
+    fn bypass_push_is_all_neutral() {
+        let bands = &default_bands()[..crate::core::DEFAULT_ACTIVE_BANDS];
+        let controls = native_biquad_control_values(bands, 0.0, false);
+        let wet: Vec<&(String, f64)> = controls
+            .iter()
+            .filter(|(k, _)| k.ends_with(":Gain 1"))
+            .collect();
+        assert!(
+            wet.iter().all(|(_, v)| *v == 0.0),
+            "a bypassed push must cross every mixer to dry"
+        );
+        let dry: Vec<&(String, f64)> = controls
+            .iter()
+            .filter(|(k, _)| k.ends_with(":Gain 2"))
+            .collect();
+        assert!(
+            dry.iter().all(|(_, v)| *v == 1.0),
+            "the direct path must carry the bypass"
+        );
+        // The filters are neutral but still addressed: Freq/Q/Gain keep the
+        // band's values (the mixer does the muting, so a re-enable restores
+        // the curve without re-pushing the filters).
+        let freqs: Vec<&(String, f64)> = controls
+            .iter()
+            .filter(|(k, _)| k.ends_with("_filter:Freq"))
+            .collect();
+        assert_eq!(freqs.len(), 20, "both sides of all 10 bands");
+    }
+
     #[test]
     fn bq_raw_band_control_values_are_coefficients_for_both_sides() {
         let mut bands = default_bands();

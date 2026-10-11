@@ -125,7 +125,7 @@ const PARAM_PROPS: u32 = 0x80001;
 ///
 /// Split out of `apply_live_controls` so the wire format can be pinned by a
 /// unit test; this module previously had no tests at all.
-fn build_props_controls_pod_bytes(controls: &[(String, f64)]) -> Option<Vec<u8>> {
+pub(crate) fn build_props_controls_pod_bytes(controls: &[(String, f64)]) -> Option<Vec<u8>> {
     let mut data: Vec<u8> = Vec::new();
     let built = {
         let mut builder = Builder::new(&mut data);
@@ -166,6 +166,35 @@ fn build_props_controls_pod_bytes(controls: &[(String, f64)]) -> Option<Vec<u8>>
     };
 
     built.then_some(data)
+}
+
+/// Parse the wire bytes back into (name, value) pairs — the round-trip
+/// half of [`build_props_controls_pod_bytes`], used by the tests to pin the
+/// wire format the DSP struct parser sees.
+#[cfg(test)]
+pub(crate) fn parse_props_controls_pod(data: &[u8]) -> Option<Vec<(String, f64)>> {
+    let pod = Pod::from_bytes(data)?;
+    let obj = pod.as_object().ok()?;
+    let prop = obj.props().next()?;
+    let st = prop.value().as_struct().ok()?;
+    let fields: Vec<_> = st.fields().collect();
+    if fields.len() % 2 != 0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(fields.len() / 2);
+    let mut fields = fields.iter();
+    while let (Some(name), Some(value)) = (fields.next(), fields.next()) {
+        if !name.is_string() || !value.is_float() {
+            return None;
+        }
+        let text = name
+            .get_string_raw()
+            .ok()?
+            .and_then(|cstr| cstr.to_str().ok())?
+            .to_string();
+        out.push((text, value.get_float().ok()? as f64));
+    }
+    Some(out)
 }
 
 impl PipeWireBackend {
