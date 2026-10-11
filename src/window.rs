@@ -1432,12 +1432,17 @@ impl MiniEqWindow {
             let graph_drag_state_tick = graph_drag_state.clone();
             let peak_gate_tick_cell: Rc<std::cell::Cell<u32>> = Rc::new(std::cell::Cell::new(0));
             let peak_gate_tick = peak_gate_tick_cell.clone();
-            // Peak-hold state: the held dBFS value, falling toward the
-            // current level at PEAK_HOLD_DECAY_DB_PER_S (updated every
-            // PEAK_HOLD_PERIOD_S at the 10 Hz ungated cadence).
+            // Peak-hold state: the held dBFS value plus when its hold
+            // expires. New peaks attack instantly and freeze the display for
+            // PEAK_HOLD_TIME; afterwards the value falls toward the current
+            // level at PEAK_HOLD_FALL_DB_PER_S (updated at the 10 Hz
+            // ungated cadence).
             let peak_hold: Rc<std::cell::Cell<f64>> =
                 Rc::new(std::cell::Cell::new(f64::NEG_INFINITY));
-            const PEAK_HOLD_DECAY_DB_PER_S: f64 = 10.0;
+            let peak_hold_until: Rc<std::cell::Cell<std::time::Instant>> =
+                Rc::new(std::cell::Cell::new(std::time::Instant::now()));
+            const PEAK_HOLD_TIME: std::time::Duration = std::time::Duration::from_millis(1000);
+            const PEAK_HOLD_FALL_DB_PER_S: f64 = 6.0;
             const PEAK_HOLD_PERIOD_S: f64 = 0.1;
             let snapshot_device_curve_tick = snapshot_device_curve.clone();
             let restore_device_curve_tick = restore_device_curve.clone();
@@ -1820,18 +1825,33 @@ impl MiniEqWindow {
                 // None would overwrite it with the curve estimate (the 30 Hz
                 // churn the gate exists to stop).
                 //
-                // Peak-hold with falldown (the user's request): the display
-                // jumps to a new peak instantly and falls back toward the
-                // current level at a fixed dB/s rate -- a readable peak
-                // number, not a jittery instantaneous one.
+                // Peak-HOLD-and-fall: a new peak jumps the display instantly
+                // and the value then FREEZES for the hold time before falling
+                // back toward the current level at a slow fixed rate -- the
+                // number is stable most of the time and only moves on real
+                // peaks, not on every 10 Hz update.
                 if !peak_gated {
+                    let now = std::time::Instant::now();
                     match live_peak {
                         Some(db) if db.is_finite() => {
-                            let prev = peak_hold.get();
-                            let decayed = prev - PEAK_HOLD_DECAY_DB_PER_S * PEAK_HOLD_PERIOD_S;
-                            let held = decayed.max(db);
-                            peak_hold.set(held);
-                            headroom.borrow_mut().apply_live_peak(Some(held));
+                            let held = peak_hold.get();
+                            let expired = now >= peak_hold_until.get();
+                            if db >= held {
+                                // New peak: instant attack, restart the hold.
+                                peak_hold.set(db);
+                                peak_hold_until.set(now + PEAK_HOLD_TIME);
+                            } else if expired {
+                                // Hold elapsed: fall toward the current
+                                // level; falling below it ends the fall.
+                                let fallen =
+                                    (held - PEAK_HOLD_FALL_DB_PER_S * PEAK_HOLD_PERIOD_S).max(db);
+                                peak_hold.set(fallen);
+                                if fallen <= db + f64::EPSILON {
+                                    peak_hold_until.set(now + PEAK_HOLD_TIME);
+                                }
+                            }
+                            // During the hold the frozen value is untouched.
+                            headroom.borrow_mut().apply_live_peak(Some(peak_hold.get()));
                         }
                         _ => {
                             // The monitor is off: the curve-estimate display
