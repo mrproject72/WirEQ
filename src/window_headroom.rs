@@ -124,6 +124,11 @@ pub struct HeadroomPanel {
     pub smooth_spread_bands: Rc<std::cell::Cell<f64>>,
     pub state: Rc<RefCell<HeadroomState>>,
     pub peak_value: Rc<RefCell<f64>>,
+    /// True while the LIVE monitor peak owns the peak display
+    /// (`apply_live_peak(Some(..))`). `update_peak`'s curve estimate must
+    /// not touch the label then: two writers with different formats made
+    /// the chip flicker between "+0.0 dB" and "-X dBFS" every tick.
+    live_peak_active: std::cell::Cell<bool>,
 }
 
 impl HeadroomPanel {
@@ -341,6 +346,7 @@ impl HeadroomPanel {
             smooth_spread_bands,
             state,
             peak_value,
+            live_peak_active: std::cell::Cell::new(false),
         }
     }
 
@@ -365,6 +371,14 @@ impl HeadroomPanel {
 
     pub fn update_peak(&mut self, peak_db: f64) {
         *self.peak_value.borrow_mut() = peak_db;
+        // The live monitor peak owns the peak label while it is active
+        // (apply_live_peak writes it at 10 Hz); writing the curve estimate
+        // here flickered the chip between "+0.0 dB" and "-X dBFS" every
+        // 33 ms tick. The estimate still updates `peak_value`, so it is
+        // correct the moment the monitor turns off.
+        if self.live_peak_active.get() {
+            return;
+        }
 
         // Upstream classifies the *estimated curve peak* (not a live signal
         // level): clipping risk above +0.5 dB, tight between -0.5 and +0.5 dB,
@@ -449,6 +463,8 @@ impl HeadroomPanel {
         // GTK invalidates a label even when set_label receives the identical
         // string, and this runs at 10 Hz: only touch the widgets when the
         // displayed value (or the LED class) actually moved.
+        self.live_peak_active
+            .set(live_dbfs.is_some_and(|db| db.is_finite()));
         let (text, tooltip, state) = match live_dbfs {
             Some(db) if db.is_finite() => (
                 format!("{db:.1} dBFS"),
