@@ -26,10 +26,13 @@ drag editing, exit reliability). Ranked next steps:
    `pipewire_backend.rs` (the pod wire format, the device-chain push) and
    the deeper routing paths that need a live engine (the containerised
    PipeWire smoke test below covers those).
-5. **Flathub submission** under our own app ID; then the GNOME Shell
-   extension from upstream.
-6. **AGENTS.md phase status refresh** — stale: it still says the graph
-   has no drag editing and Phase 8's flatpak is pending; both done.
+5. **Flathub submission** — the rebrand is done (app ID
+   `io.github.mrproject72.WirEQ`, the manifest/metainfo/icons renamed);
+   the submission itself needs the Flathub repo setup + maintainer
+   review on the GitHub account. The GNOME Shell extension from
+   upstream is a separate follow-up.
+6. ~~**AGENTS.md phase status refresh**~~ — DONE 2026-10-11 (part of the
+   WirEQ rebrand commit: all phases ✅, the stale graph claims removed).
 
 # TODO
 
