@@ -123,6 +123,38 @@ fn focus_summary_text(
     )
 }
 
+/// One step of the peak-hold meter state machine (pure, unit-tested).
+///
+/// - `current >= held`: a new peak -- instant attack, the hold restarts.
+/// - The hold not expired: the held value is frozen.
+/// - The hold expired: the held value falls toward `current` at
+///   `fall_db_per_s`; falling below `current` restarts the hold.
+///
+/// Returns the next `(held, hold_until)`.
+pub fn peak_hold_step(
+    held: f64,
+    hold_until: std::time::Instant,
+    current: f64,
+    now: std::time::Instant,
+    hold_time: std::time::Duration,
+    fall_db_per_s: f64,
+    period_s: f64,
+) -> (f64, std::time::Instant) {
+    if current >= held {
+        return (current, now + hold_time);
+    }
+    if now < hold_until {
+        return (held, hold_until);
+    }
+    let fallen = (held - fall_db_per_s * period_s).max(current);
+    let until = if fallen <= current + f64::EPSILON {
+        now + hold_time
+    } else {
+        hold_until
+    };
+    (fallen, until)
+}
+
 fn recompute_solo_active(faders: &[Rc<RefCell<crate::band_fader::EqBandFader>>]) {
     let solo_active = faders.iter().any(|fader| fader.borrow().soloed);
     for fader in faders.iter() {
@@ -1835,22 +1867,17 @@ impl MiniEqWindow {
                     let now = std::time::Instant::now();
                     match live_peak {
                         Some(db) if db.is_finite() => {
-                            let held = peak_hold.get();
-                            let expired = now >= peak_hold_until.get();
-                            if db >= held {
-                                // New peak: instant attack, restart the hold.
-                                peak_hold.set(db);
-                                peak_hold_until.set(now + PEAK_HOLD_TIME);
-                            } else if expired {
-                                // Hold elapsed: fall toward the current
-                                // level; falling below it ends the fall.
-                                let fallen =
-                                    (held - PEAK_HOLD_FALL_DB_PER_S * PEAK_HOLD_PERIOD_S).max(db);
-                                peak_hold.set(fallen);
-                                if fallen <= db + f64::EPSILON {
-                                    peak_hold_until.set(now + PEAK_HOLD_TIME);
-                                }
-                            }
+                            let (held, hold_until) = crate::window::peak_hold_step(
+                                peak_hold.get(),
+                                peak_hold_until.get(),
+                                db,
+                                now,
+                                PEAK_HOLD_TIME,
+                                PEAK_HOLD_FALL_DB_PER_S,
+                                PEAK_HOLD_PERIOD_S,
+                            );
+                            peak_hold.set(held);
+                            peak_hold_until.set(hold_until);
                             // During the hold the frozen value is untouched.
                             headroom.borrow_mut().apply_live_peak(Some(peak_hold.get()));
                         }
@@ -3462,4 +3489,111 @@ fn create_menu_model() -> gio::Menu {
     menu.append_section(None, &help_section);
 
     menu
+}
+
+#[cfg(test)]
+mod peak_hold_tests {
+    use super::peak_hold_step;
+    use std::time::{Duration, Instant};
+
+    fn at(offset_ms: u64) -> Instant {
+        Instant::now() + Duration::from_millis(offset_ms)
+    }
+
+    #[test]
+    fn new_peak_attacks_instantly_and_restarts_the_hold() {
+        let until = at(500); // hold still running
+        let (held, until) = peak_hold_step(
+            -10.0,
+            until,
+            -5.0,
+            at(600),
+            Duration::from_secs(1),
+            6.0,
+            0.1,
+        );
+        assert_eq!(held, -5.0, "a bigger peak jumps the display instantly");
+        assert!(
+            until > at(600) + Duration::from_millis(900),
+            "the hold restarts"
+        );
+    }
+
+    #[test]
+    fn the_value_is_frozen_while_the_hold_runs() {
+        let until = at(5000); // hold far from expired
+        let expected_until = until; // the same Instant, by identity
+        let (held, until) = peak_hold_step(
+            -10.0,
+            until,
+            -20.0,
+            at(1000),
+            Duration::from_secs(1),
+            6.0,
+            0.1,
+        );
+        assert_eq!(held, -10.0, "during the hold the value does not move");
+        assert_eq!(until, expected_until, "the hold expiry is untouched");
+    }
+
+    #[test]
+    fn after_the_hold_the_value_falls_toward_the_current_level() {
+        let until = at(500); // expired at the step time (600)
+        let (held, _) = peak_hold_step(
+            -10.0,
+            until,
+            -20.0,
+            at(600),
+            Duration::from_secs(1),
+            6.0,
+            0.1,
+        );
+        assert!(
+            (held - (-10.6)).abs() < 1e-9,
+            "the value falls 6 dB/s * 0.1 s = 0.6 dB per step: {held}"
+        );
+        assert!(
+            held > -20.0,
+            "the fall never overshoots below the current level"
+        );
+    }
+
+    #[test]
+    fn falling_below_the_current_level_restarts_the_hold() {
+        // Held -11.0, current -11.5: the fall would land at -11.6 -- below
+        // the level -- so it clamps and the hold restarts (no chatter).
+        let until = at(500);
+        let (held, until2) = peak_hold_step(
+            -11.0,
+            until,
+            -11.5,
+            at(600),
+            Duration::from_secs(1),
+            6.0,
+            0.1,
+        );
+        assert_eq!(held, -11.5);
+        assert!(
+            until2 > at(600) + Duration::from_millis(900),
+            "the hold restarts at the level"
+        );
+    }
+
+    #[test]
+    fn a_rising_level_ends_the_fall_early() {
+        // Held -14.0 (falling), the music jumps back to -12.0: the attack
+        // wins regardless of the hold expiry.
+        let until = at(5000); // expired
+        let (held, until2) = peak_hold_step(
+            -14.0,
+            until,
+            -12.0,
+            at(600),
+            Duration::from_secs(1),
+            6.0,
+            0.1,
+        );
+        assert_eq!(held, -12.0);
+        assert!(until2 > at(600) + Duration::from_millis(900));
+    }
 }

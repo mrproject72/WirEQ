@@ -650,6 +650,17 @@ impl RoutingEngine {
     /// playback); default playback is in scope iff the chosen sink IS the
     /// default. Anything explicitly aimed elsewhere must match the chosen
     /// sink. Reroute takes everything.
+    /// A metadata target that names a sink which is neither our processing
+    /// path nor live: a stale serial from a previous instance (killed
+    /// without a restore -- the EQ sink it named is gone). Such a target is
+    /// not a deliberate choice and must resolve to no-target, or the enable
+    /// never finds the stream.
+    fn target_is_stale(target: &str, allowed: &[String], live_serials: &[String]) -> bool {
+        !target.is_empty()
+            && !allowed.iter().any(|a| a == target)
+            && !live_serials.iter().any(|serial| serial == target)
+    }
+
     fn scope_allows(
         target: Option<&str>,
         sink_serial: &str,
@@ -845,11 +856,7 @@ impl RoutingEngine {
                 self.stream_target(s.id)
                     .target_object
                     .as_deref()
-                    .is_some_and(|t| {
-                        !t.is_empty()
-                            && !allowed.iter().any(|a| a == t)
-                            && !live_serials.iter().any(|serial| serial == t)
-                    })
+                    .is_some_and(|t| Self::target_is_stale(t, &allowed, &live_serials))
             })
             .map(|s| s.id)
             .collect();
@@ -3351,6 +3358,44 @@ mod tests {
             Some("D"),
             OutputRoutingMode::Reroute
         ));
+    }
+
+    /// The stale-target rule (the killed-instance regression): a stored
+    /// target naming a sink that is neither our processing path nor live is
+    /// stale, so the enable resolves it to no-target instead of skipping the
+    /// stream forever.
+    #[test]
+    fn stale_target_predicate() {
+        use RoutingEngine as R;
+        let allowed = vec!["eq_sink_serial".to_string()];
+        let live = vec!["dev_a_serial".to_string(), "dev_b_serial".to_string()];
+
+        // The dead previous instance's EQ sink: stale.
+        assert!(R::target_is_stale("dead_eq_serial", &allowed, &live));
+        // Our own processing path: NOT stale (an already-routed stream).
+        assert!(!R::target_is_stale("eq_sink_serial", &allowed, &live));
+        // A live foreign device: NOT stale (a deliberate choice).
+        assert!(!R::target_is_stale("dev_a_serial", &allowed, &live));
+        // Empty targets are handled elsewhere (the None arm).
+        assert!(!R::target_is_stale("", &allowed, &live));
+    }
+
+    /// The graph's filter labels: Sin (the Smooth override's internal bell)
+    /// and Bell must render as the SAME label -- comparing the enums instead
+    /// made the type-change rebuild fire on every tick and the editor blink
+    /// on every drag (the step-8 regression).
+    #[test]
+    fn smooth_sin_and_bell_share_a_graph_label() {
+        use crate::core::FilterType;
+        assert_eq!(
+            crate::filter_chain::native_biquad_label(FilterType::Sin),
+            crate::filter_chain::native_biquad_label(FilterType::Bell)
+        );
+        // ...while a real topology change is still detected.
+        assert_ne!(
+            crate::filter_chain::native_biquad_label(FilterType::Bell),
+            crate::filter_chain::native_biquad_label(FilterType::HiPass)
+        );
     }
 
     /// The two modes round-trip through the config: a remembered Reroute is
