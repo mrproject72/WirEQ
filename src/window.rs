@@ -1432,6 +1432,13 @@ impl MiniEqWindow {
             let graph_drag_state_tick = graph_drag_state.clone();
             let peak_gate_tick_cell: Rc<std::cell::Cell<u32>> = Rc::new(std::cell::Cell::new(0));
             let peak_gate_tick = peak_gate_tick_cell.clone();
+            // Peak-hold state: the held dBFS value, falling toward the
+            // current level at PEAK_HOLD_DECAY_DB_PER_S (updated every
+            // PEAK_HOLD_PERIOD_S at the 10 Hz ungated cadence).
+            let peak_hold: Rc<std::cell::Cell<f64>> =
+                Rc::new(std::cell::Cell::new(f64::NEG_INFINITY));
+            const PEAK_HOLD_DECAY_DB_PER_S: f64 = 10.0;
+            const PEAK_HOLD_PERIOD_S: f64 = 0.1;
             let snapshot_device_curve_tick = snapshot_device_curve.clone();
             let restore_device_curve_tick = restore_device_curve.clone();
 
@@ -1529,13 +1536,23 @@ impl MiniEqWindow {
                 // period. The spectrum keeps its 30 fps redraw.
                 let peak_gate_tick = peak_gate_tick.get().wrapping_add(1);
                 peak_gate_tick_cell.set(peak_gate_tick);
-                let live_peak = if peak_gate_tick % 3 == 0 {
+                // The dBFS number and the LED update at 10 Hz (upstream
+                // CONTROL_ANALYZER_EMIT_INTERVAL_SECONDS = 0.10), not 30: the
+                // label churned 30x/s for a readout nobody can read at that
+                // rate. GATED ticks skip only the peak read and the label
+                // application -- the rest of the tick (the remote drain, the
+                // payload push, the publish) stays at full speed. The skipped
+                // reads are also the peak-hold the user asked for:
+                // take_window_peak consumes, so the unconsumed windows make
+                // the displayed value a max over the gate period.
+                let peak_gated = peak_gate_tick % 3 != 0;
+                let live_peak = if peak_gated {
+                    None
+                } else {
                     backend
                         .borrow()
                         .as_ref()
                         .and_then(|be| be.monitor_peak_dbfs())
-                } else {
-                    None
                 };
 
                 // The live spectrum, read ONCE per tick and shared by the graph
@@ -1799,7 +1816,31 @@ impl MiniEqWindow {
                 // the preamp) and paints its own red class, and the blink follows
                 // that class. An earlier version recomputed the condition from
                 // the level here, which disagreed with the button's own state.
-                headroom.borrow_mut().apply_live_peak(live_peak);
+                // GATED ticks do not touch the peak label at all: passing
+                // None would overwrite it with the curve estimate (the 30 Hz
+                // churn the gate exists to stop).
+                //
+                // Peak-hold with falldown (the user's request): the display
+                // jumps to a new peak instantly and falls back toward the
+                // current level at a fixed dB/s rate -- a readable peak
+                // number, not a jittery instantaneous one.
+                if !peak_gated {
+                    match live_peak {
+                        Some(db) if db.is_finite() => {
+                            let prev = peak_hold.get();
+                            let decayed = prev - PEAK_HOLD_DECAY_DB_PER_S * PEAK_HOLD_PERIOD_S;
+                            let held = decayed.max(db);
+                            peak_hold.set(held);
+                            headroom.borrow_mut().apply_live_peak(Some(held));
+                        }
+                        _ => {
+                            // The monitor is off: the curve-estimate display
+                            // takes over and the hold resets.
+                            peak_hold.set(f64::NEG_INFINITY);
+                            headroom.borrow_mut().apply_live_peak(live_peak);
+                        }
+                    }
+                }
 
                 // Push UI state to the PipeWire engine.
                 //
