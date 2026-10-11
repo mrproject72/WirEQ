@@ -3,17 +3,14 @@
 The flatpak EQ now works end-to-end (native-biquad graph, sandbox push,
 drag editing, exit reliability). Ranked next steps:
 
-1. **Graph parity polish (steps 6-9 of
-   `docs/PLAN/graph-parity-2026-10-04.md`)** — IN PROGRESS 2026-10-10:
-   - A/B-bypass curve styling (grey/half-alpha when bypassed), gradient
-     area fill under the curve, low-alpha glow, the selected band's own
-     contribution curve
-   - Focus label under the graph (`Band 3 • 1.0k • +6.0 dB`), the
-     `N Bands` band-count chip, solo-effectiveness fader dimming
-   - Fader drag/scroll/arrow-keys select the band
-   - LUFS meter draw func in the monitor strip
-2. **Preset lifecycle completion** — save/save-as, delete, import/export
-   (rename/revert/monitoring already exist).
+1. ~~**Graph parity polish (steps 6-9)**~~ — DONE 2026-10-11: the
+   gradient fill, the glow, the contribution curve, the bypass styling,
+   the focus row + the N Bands chip, solo dimming, fader-drag
+   selection, and the LUFS meter bar.
+2. ~~**Preset lifecycle**~~ — DONE 2026-10-11: audited — add/update/
+   rename/delete/import/export were all already wired; added the
+   replace confirmation (upstream confirm_preset_replacement) and the
+   delete confirmation with the curve-kept relabel.
 3. **Controller-pattern refactor** — one authoritative band list
    (upstream `controller.bands`) instead of the fader widgets as source +
    the tick's snapshot; enables upstream's 16 ms per-band DSP pushes
