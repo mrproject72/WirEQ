@@ -1430,6 +1430,8 @@ impl MiniEqWindow {
             let device_curve_memory_tick = device_curve_memory.clone();
             let graph_handle_for_focus = utility.graph.clone();
             let graph_drag_state_tick = graph_drag_state.clone();
+            let peak_gate_tick_cell: Rc<std::cell::Cell<u32>> = Rc::new(std::cell::Cell::new(0));
+            let peak_gate_tick = peak_gate_tick_cell.clone();
             let snapshot_device_curve_tick = snapshot_device_curve.clone();
             let restore_device_curve_tick = restore_device_curve.clone();
 
@@ -1518,10 +1520,23 @@ impl MiniEqWindow {
                 // Read the live monitor peak ONCE per tick: the analyzer's
                 // take_window_peak() consumes the value, so a second read in
                 // the same tick would come back empty.
-                let live_peak = backend
-                    .borrow()
-                    .as_ref()
-                    .and_then(|be| be.monitor_peak_dbfs());
+                // The dBFS number and the LED update at 10 Hz (upstream
+                // CONTROL_ANALYZER_EMIT_INTERVAL_SECONDS = 0.10), not 30:
+                // the label churned 30x/s for a readout nobody can read at
+                // that rate. Skipping reads is also the peak-hold the user
+                // asked for: take_window_peak consumes, so the unconsumed
+                // windows make the displayed value a max over the gate
+                // period. The spectrum keeps its 30 fps redraw.
+                let peak_gate_tick = peak_gate_tick.get().wrapping_add(1);
+                peak_gate_tick_cell.set(peak_gate_tick);
+                let live_peak = if peak_gate_tick % 3 == 0 {
+                    backend
+                        .borrow()
+                        .as_ref()
+                        .and_then(|be| be.monitor_peak_dbfs())
+                } else {
+                    None
+                };
 
                 // The live spectrum, read ONCE per tick and shared by the graph
                 // overlay and D-Bus. Cheap when the monitor is off:
