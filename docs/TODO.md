@@ -11,10 +11,15 @@ drag editing, exit reliability). Ranked next steps:
    rename/delete/import/export were all already wired; added the
    replace confirmation (upstream confirm_preset_replacement) and the
    delete confirmation with the curve-kept relabel.
-3. **Controller-pattern refactor** — one authoritative band list
-   (upstream `controller.bands`) instead of the fader widgets as source +
-   the tick's snapshot; enables upstream's 16 ms per-band DSP pushes
-   during drags (ours debounces the full payload at 400 ms).
+3. ~~**Controller-pattern UX**~~ — DONE 2026-10-11: while a graph dot or
+   a fader is dragged, the band payload pushes ride the 33 ms tick
+   (upstream's 16 ms class) so the curve follows the mouse live; outside
+   a drag the 400 ms debounce stands. The full state migration (moving
+   the bands out of the fader widgets into one authoritative list) is
+   DEFERRED: the mouse-absolute drag fix removed the copy-lag bug class,
+   and migrating every edit path risks the just-fixed behaviours for no
+   further user-visible gain. Revisit only if a new bug lands in the
+   fader/graph state sync.
 4. **Unit-test coverage for the backend** — `pipewire_backend.rs` and
    `routing.rs` have near-zero automated coverage; the routing edge cases
    hit this week (stale targets, prefix-push semantics, scope rules) are
