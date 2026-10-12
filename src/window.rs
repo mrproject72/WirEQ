@@ -98,7 +98,10 @@ fn fader_band_snapshot(
 fn largest_gap_frequency(freqs: &[f64]) -> f64 {
     let mut sorted: Vec<f64> = freqs.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let mut best = (crate::core::GRAPH_FREQ_MAX / crate::core::GRAPH_FREQ_MIN).ln();
+    // The search must start BELOW every real gap. Initialising `best` to the
+    // full-range gap (ln 1000) made it unbeatable -- every insert collapsed
+    // to the fallback midpoint, sqrt(20*20000) = 632 Hz.
+    let mut best = f64::NEG_INFINITY;
     let mut best_frequency = (crate::core::GRAPH_FREQ_MIN * crate::core::GRAPH_FREQ_MAX).sqrt();
     let mut previous = crate::core::GRAPH_FREQ_MIN;
     for &frequency in &sorted {
@@ -1183,12 +1186,43 @@ impl WirEqWindow {
                             f.drawing_area.queue_draw();
                         }
                     } else {
-                        // Off-grid: only the new band appears, at the centre
-                        // of the widest gap so the dots stay spread out.
+                        // Off-grid: the new band goes at the centre of the
+                        // widest gap so the dots stay spread out -- AND at
+                        // its frequency-sorted rank, so the fader row stays
+                        // ordered (a mid-frequency band appended at the end
+                        // of the row is what read as "starts again from
+                        // 632 Hz after 19.4 kHz").
                         let frequency = largest_gap_frequency(&freqs);
-                        if let Some(fader) = registry.borrow().get(count).cloned() {
+                        let rank = freqs.iter().filter(|&&f| f < frequency).count();
+                        // Shift faders rank..count up one slot, top-down, so
+                        // the band that ends up at `rank` makes room.
+                        for i in (rank..count).rev() {
+                            let src = registry.borrow().get(i).cloned();
+                            let dst = registry.borrow().get(i + 1).cloned();
+                            if let (Some(src), Some(dst)) = (src, dst) {
+                                let s = src.borrow();
+                                let mut d = dst.borrow_mut();
+                                let selected = s.selected;
+                                d.smooth_override = s.smooth_override;
+                                d.set_band_state(
+                                    s.gain_db,
+                                    s.frequency,
+                                    s.frequency_label.clone(),
+                                    s.q_value,
+                                    s.q_label.clone(),
+                                    s.filter_type,
+                                    s.filter_type_label.clone(),
+                                    selected,
+                                    s.active,
+                                    s.muted,
+                                    s.soloed,
+                                    solo_active,
+                                );
+                                d.drawing_area.queue_draw();
+                            }
+                        }
+                        if let Some(fader) = registry.borrow().get(rank).cloned() {
                             let mut f = fader.borrow_mut();
-                            let selected = f.selected;
                             f.smooth_override = smooth.get();
                             f.set_band_state(
                                 0.0,
@@ -1201,13 +1235,23 @@ impl WirEqWindow {
                                     crate::core::FilterType::Bell,
                                 )
                                 .into(),
-                                selected,
+                                false,
                                 true,
                                 false,
                                 false,
                                 solo_active,
                             );
                             f.drawing_area.queue_draw();
+                        }
+                        // A selected fader may have moved: re-point the graph.
+                        if let Some(index) = registry
+                            .borrow()
+                            .iter()
+                            .take(count + 1)
+                            .find(|f| f.borrow().selected)
+                            .map(|f| f.borrow().index)
+                        {
+                            graph.borrow_mut().set_selected_band(Some(index));
                         }
                     }
                     visible.set(apply_visible_band_count(
@@ -3861,6 +3905,36 @@ fn create_menu_model() -> gio::Menu {
     menu.append_section(None, &help_section);
 
     menu
+}
+
+#[cfg(test)]
+mod tests {
+    use super::largest_gap_frequency;
+
+    #[test]
+    fn widest_gap_search_never_collapses_to_the_fallback_midpoint() {
+        // The regression: `best` seeded with the full-range gap (ln 1000)
+        // was unbeatable, so every insert returned sqrt(20*20000) = 632 Hz
+        // regardless of the existing bands.
+        let freqs = [100.0, 200.0, 400.0, 2500.0, 5000.0];
+        assert_ne!(
+            largest_gap_frequency(&freqs),
+            632.46,
+            "the fallback must lose to a real gap"
+        );
+        // The widest gap here is 400 -> 2500 (the leading 20 -> 100 edge is
+        // narrower); the new band sits at the geometric centre.
+        let f = largest_gap_frequency(&freqs);
+        assert!((f - 1000.0).abs() < 1.0, "got {f}");
+
+        // A single band splits at its larger edge gap: 20 -> 1000 (ln 3.9)
+        // beats 1000 -> 20000 (ln 3.0).
+        let f = largest_gap_frequency(&[1000.0]);
+        assert!((f - (20.0_f64 * 1000.0).sqrt()).abs() < 1.0, "got {f}");
+
+        // An empty row starts at the range centre.
+        assert!((largest_gap_frequency(&[]) - 632.4555).abs() < 0.01);
+    }
 }
 
 #[cfg(test)]
