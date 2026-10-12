@@ -122,6 +122,40 @@ fn largest_gap_frequency(freqs: &[f64]) -> f64 {
     )
 }
 
+/// Index of the band whose removal keeps the log-frequency distribution most
+/// even: the smallest merged neighbour gap, the 20 Hz / 20 kHz edges
+/// included. Removing the highest frequency instead would strip the top of
+/// the range first and leave only low-frequency controls; this thins the
+/// densest area instead — the exact inverse of [`largest_gap_frequency`].
+fn densest_band_index(freqs: &[f64]) -> usize {
+    let mut order: Vec<usize> = (0..freqs.len()).collect();
+    order.sort_by(|&a, &b| {
+        freqs[a]
+            .partial_cmp(&freqs[b])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut best_cost = f64::INFINITY;
+    let mut best = 0;
+    for (k, &index) in order.iter().enumerate() {
+        let left = if k == 0 {
+            crate::core::GRAPH_FREQ_MIN
+        } else {
+            freqs[order[k - 1]]
+        };
+        let right = if k + 1 == freqs.len() {
+            crate::core::GRAPH_FREQ_MAX
+        } else {
+            freqs[order[k + 1]]
+        };
+        let cost = (right / left).ln();
+        if cost < best_cost {
+            best_cost = cost;
+            best = index;
+        }
+    }
+    best
+}
+
 /// Apply `edit` to the fader at `index`, redrawing it when it exists.
 fn edit_fader(
     registry: &Rc<RefCell<Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>>>,
@@ -1287,48 +1321,78 @@ impl WirEqWindow {
                         .map(|f| f.borrow().frequency)
                         .collect();
                     let solo_active = registry.borrow().iter().any(|f| f.borrow().soloed);
-                    let remove_index =
-                        if crate::core::bands_match_log_grid_frequencies(&freqs, count) {
-                            // Re-space the survivors to the even (count-1) grid,
-                            // then deactivate the last slot.
-                            let grid = crate::core::compute_log_spaced_band_defaults(count - 1);
-                            for (i, (frequency, q)) in grid.iter().enumerate() {
-                                let Some(fader) = registry.borrow().get(i).cloned() else {
-                                    continue;
-                                };
-                                let mut f = fader.borrow_mut();
-                                let (gain, filter_type, active, mute, solo) =
-                                    (f.gain_db, f.filter_type, f.active, f.muted, f.soloed);
-                                let selected = f.selected;
-                                f.set_band_state(
-                                    gain,
-                                    *frequency,
-                                    crate::window_band_fader::format_frequency_label(*frequency),
-                                    *q,
-                                    crate::window_band_fader::format_q_label(*q),
-                                    filter_type,
-                                    crate::band_fader::filter_type_short_label(filter_type).into(),
+                    let compact = if crate::core::bands_match_log_grid_frequencies(&freqs, count) {
+                        // Re-space the survivors to the even (count-1)
+                        // grid, then deactivate the last slot. The range
+                        // stays 20 Hz..20 kHz -- the grid always spans it.
+                        let grid = crate::core::compute_log_spaced_band_defaults(count - 1);
+                        for (i, (frequency, q)) in grid.iter().enumerate() {
+                            let Some(fader) = registry.borrow().get(i).cloned() else {
+                                continue;
+                            };
+                            let mut f = fader.borrow_mut();
+                            let (gain, filter_type, active, mute, solo) =
+                                (f.gain_db, f.filter_type, f.active, f.muted, f.soloed);
+                            let selected = f.selected;
+                            f.set_band_state(
+                                gain,
+                                *frequency,
+                                crate::window_band_fader::format_frequency_label(*frequency),
+                                *q,
+                                crate::window_band_fader::format_q_label(*q),
+                                filter_type,
+                                crate::band_fader::filter_type_short_label(filter_type).into(),
+                                selected,
+                                active,
+                                mute,
+                                solo,
+                                solo_active,
+                            );
+                            f.drawing_area.queue_draw();
+                        }
+                        // The last slot is deactivated in place; no
+                        // compaction needed.
+                        None
+                    } else {
+                        // Off-grid: remove the band whose absence keeps
+                        // the distribution most even (the densest gap),
+                        // then compact the row so the survivors stay in
+                        // frequency order and the deactivated slot lands
+                        // at the hidden tail.
+                        Some(densest_band_index(&freqs))
+                    };
+                    if let Some(remove_index) = compact {
+                        // Shift faders (remove_index+1)..count down one slot
+                        // so the row closes the hole.
+                        for i in remove_index..count - 1 {
+                            let src = registry.borrow().get(i + 1).cloned();
+                            let dst = registry.borrow().get(i).cloned();
+                            if let (Some(src), Some(dst)) = (src, dst) {
+                                let s = src.borrow();
+                                let mut d = dst.borrow_mut();
+                                let selected = s.selected;
+                                d.smooth_override = s.smooth_override;
+                                d.set_band_state(
+                                    s.gain_db,
+                                    s.frequency,
+                                    s.frequency_label.clone(),
+                                    s.q_value,
+                                    s.q_label.clone(),
+                                    s.filter_type,
+                                    s.filter_type_label.clone(),
                                     selected,
-                                    active,
-                                    mute,
-                                    solo,
+                                    s.active,
+                                    s.muted,
+                                    s.soloed,
                                     solo_active,
                                 );
-                                f.drawing_area.queue_draw();
+                                d.drawing_area.queue_draw();
                             }
-                            count - 1
-                        } else {
-                            // Off-grid: drop the highest-frequency band.
-                            freqs
-                                .iter()
-                                .enumerate()
-                                .max_by(|a, b| {
-                                    a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
-                                })
-                                .map(|(i, _)| i)
-                                .unwrap_or(count - 1)
-                        };
-                    if let Some(fader) = registry.borrow().get(remove_index).cloned() {
+                        }
+                    }
+                    // Deactivate the tail slot: the shifted-out band's state
+                    // (or, on-grid, the last slot itself).
+                    if let Some(fader) = registry.borrow().get(count - 1).cloned() {
                         let mut f = fader.borrow_mut();
                         let frequency = f.frequency;
                         let q = f.q_value;
@@ -1360,6 +1424,16 @@ impl WirEqWindow {
                         Some(&graph),
                         count - 1,
                     ));
+                    // A selected fader may have moved with the compaction.
+                    if let Some(index) = registry
+                        .borrow()
+                        .iter()
+                        .take(count - 1)
+                        .find(|f| f.borrow().selected)
+                        .map(|f| f.borrow().index)
+                    {
+                        graph.borrow_mut().set_selected_band(Some(index));
+                    }
                     refresh();
                 });
         }
@@ -3934,6 +4008,27 @@ mod tests {
 
         // An empty row starts at the range centre.
         assert!((largest_gap_frequency(&[]) - 632.4555).abs() < 0.01);
+    }
+
+    #[test]
+    fn removal_takes_the_densest_gap_not_the_top_of_the_range() {
+        use super::densest_band_index;
+
+        // Stacked duplicates (the 632 Hz bug's leftovers): the smallest
+        // merged gap is inside the stack, so a duplicate goes first.
+        let stacked = [100.0, 632.0, 632.0, 632.0, 2000.0];
+        let idx = densest_band_index(&stacked);
+        assert_eq!(stacked[idx], 632.0);
+
+        // A dense low cluster with a lonely top band: the top band survives
+        // because removing it would open a huge tail gap (20000/2000 = 10x).
+        let spread = [100.0, 110.0, 121.0, 133.0, 2000.0];
+        let idx = densest_band_index(&spread);
+        assert_ne!(
+            spread[idx], 2000.0,
+            "the top band must not be stripped first"
+        );
+        assert_eq!(spread[idx], 121.0, "the smallest merged gap goes");
     }
 }
 

@@ -377,7 +377,7 @@ impl EqGraph {
         let band_remove_button = gtk4::Button::from_icon_name("list-remove-symbolic");
         band_remove_button.set_css_classes(&["flat"]);
         band_remove_button.set_valign(gtk4::Align::Center);
-        band_remove_button.set_tooltip_text(Some("Deactivate the last band"));
+        band_remove_button.set_tooltip_text(Some("Remove a band (thins the densest gap)"));
         let band_add_button = gtk4::Button::from_icon_name("list-add-symbolic");
         band_add_button.set_css_classes(&["flat"]);
         band_add_button.set_valign(gtk4::Align::Center);
