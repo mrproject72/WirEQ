@@ -1248,6 +1248,30 @@ pub fn fader_band_count_for_profile(bands: &[EqBand]) -> usize {
     profile_band_count(bands).clamp(1, MAX_BANDS)
 }
 
+/// True when the first `count` band frequencies sit exactly on the log-spaced
+/// grid [`compute_log_spaced_band_defaults`] produces for `count` (relative
+/// tolerance 1e-6). Presets and AutoEq imports carry their own frequencies and
+/// do not match; the untouched default row and built-in presets built on
+/// `default_bands()` do.
+pub fn bands_match_log_grid(bands: &[EqBand], count: usize) -> bool {
+    bands_match_log_grid_frequencies(
+        &bands.iter().map(|band| band.frequency).collect::<Vec<_>>(),
+        count,
+    )
+}
+
+/// Frequency-only variant of [`bands_match_log_grid`]: the fader row carries
+/// raw frequencies, not `EqBand`s.
+pub fn bands_match_log_grid_frequencies(frequencies: &[f64], count: usize) -> bool {
+    if frequencies.len() < count {
+        return false;
+    }
+    compute_log_spaced_band_defaults(count)
+        .iter()
+        .zip(frequencies.iter())
+        .all(|((freq, _), f)| (f - freq).abs() <= 1e-6 * freq)
+}
+
 /// Built-in factory presets that ship with the app and cannot be removed by
 /// the user. They live in code (not the preset dir) so they always exist.
 pub const BUILTIN_PRESET_NAMES: &[&str] = &["Neutral", "Bass Boost", "Treble Boost"];
@@ -2769,6 +2793,32 @@ mod tests {
         long.push(EqBand::new(MAX_BANDS));
         assert_eq!(profile_band_count(&long), MAX_BANDS);
         assert_eq!(fader_band_count_for_profile(&long), MAX_BANDS);
+    }
+
+    #[test]
+    fn bands_match_log_grid_detects_default_and_custom_layouts() {
+        // The untouched default row is on the 10-band grid.
+        assert!(bands_match_log_grid(&default_bands(), DEFAULT_ACTIVE_BANDS));
+        // Built-in presets keep the grid frequencies.
+        let (bass, _) = builtin_preset_bands("Bass Boost").unwrap();
+        assert!(bands_match_log_grid(&bass, DEFAULT_ACTIVE_BANDS));
+
+        // ...but not other counts.
+        assert!(!bands_match_log_grid(
+            &default_bands(),
+            DEFAULT_ACTIVE_BANDS + 1
+        ));
+
+        // A preset with its own frequencies does not match (AutoEq imports).
+        let mut custom = default_bands();
+        custom[0].frequency = 25.0;
+        assert!(!bands_match_log_grid(&custom, DEFAULT_ACTIVE_BANDS));
+
+        // A shorter slice can never match a longer grid.
+        assert!(!bands_match_log_grid(
+            &default_bands()[..5],
+            DEFAULT_ACTIVE_BANDS
+        ));
     }
 
     #[test]

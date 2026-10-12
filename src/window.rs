@@ -91,6 +91,34 @@ fn fader_band_snapshot(
     bands
 }
 
+/// Centre of the widest log-frequency gap between consecutive bands, the
+/// 20 Hz and 20 kHz edges included. Used by the band-count stepper's +
+/// when the row carries custom (off-grid) frequencies: the new band lands
+/// where it is most needed and the dots stay spread across the range.
+fn largest_gap_frequency(freqs: &[f64]) -> f64 {
+    let mut sorted: Vec<f64> = freqs.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mut best = (crate::core::GRAPH_FREQ_MAX / crate::core::GRAPH_FREQ_MIN).ln();
+    let mut best_frequency = (crate::core::GRAPH_FREQ_MIN * crate::core::GRAPH_FREQ_MAX).sqrt();
+    let mut previous = crate::core::GRAPH_FREQ_MIN;
+    for &frequency in &sorted {
+        let gap = (frequency / previous).ln();
+        if gap > best {
+            best = gap;
+            best_frequency = (previous * frequency).sqrt();
+        }
+        previous = frequency;
+    }
+    let tail = (crate::core::GRAPH_FREQ_MAX / previous).ln();
+    if tail > best {
+        best_frequency = (previous * crate::core::GRAPH_FREQ_MAX).sqrt();
+    }
+    best_frequency.clamp(
+        crate::core::EQ_FREQUENCY_MIN_HZ,
+        crate::core::EQ_FREQUENCY_MAX_HZ,
+    )
+}
+
 /// Apply `edit` to the fader at `index`, redrawing it when it exists.
 fn edit_fader(
     registry: &Rc<RefCell<Vec<Rc<RefCell<crate::band_fader::EqBandFader>>>>>,
@@ -1080,14 +1108,23 @@ impl WirEqWindow {
 
         // --- Band-count stepper (the +/- next to the "N Bands" chip).
         //
-        // + activates the first slot beyond the visible prefix as a flat Bell
-        // at its log-spaced frequency (upstream derives the same slots from
-        // `compute_log_spaced_band_defaults`); − deactivates the last visible
-        // band. The profile count IS the visible prefix, so the fader row,
-        // the DSP payload and the chip follow through the same paths a
-        // preset load uses: the chain rebuilds when a type change makes the
-        // node labels differ, and Off bands cross to dry so nothing is left
-        // audibly active.
+        // + activates one more fader, − one fewer. On the default log-spaced
+        // grid the WHOLE row re-spaces to the even grid of the new count
+        // (upstream derives frequency and Q from the band count), so the dots
+        // stay proportional across 20 Hz..20 kHz and every added band lands
+        // in sorted order -- taking the next slot of the 32-band inactive
+        // defaults instead would jump from ~15 kHz back to ~194 Hz (the
+        // mixed 10/32-band grids). Gains and filter types survive the
+        // re-space; only frequencies/Q move.
+        // Off the grid (a preset/AutoEq import with its own frequencies)
+        // nothing is re-spaced: + inserts a flat Bell at the widest gap
+        // (edges included), − removes the highest-frequency band.
+        //
+        // The profile count IS the visible prefix, so the fader row, the DSP
+        // payload and the chip follow through the same paths a preset load
+        // uses: the chain rebuilds when a type change makes the node labels
+        // differ, and Off bands cross to dry so nothing is left audibly
+        // active.
         {
             let registry = fader_registry.clone();
             let cells = fader_cells.clone();
@@ -1105,30 +1142,73 @@ impl WirEqWindow {
                     if count >= crate::core::MAX_BANDS {
                         return;
                     }
-                    let band = crate::core::default_bands()[count].clone();
+                    let freqs: Vec<f64> = registry
+                        .borrow()
+                        .iter()
+                        .take(count)
+                        .map(|f| f.borrow().frequency)
+                        .collect();
                     let solo_active = registry.borrow().iter().any(|f| f.borrow().soloed);
-                    if let Some(fader) = registry.borrow().get(count).cloned() {
-                        let mut f = fader.borrow_mut();
-                        let selected = f.selected;
-                        f.smooth_override = smooth.get();
-                        f.set_band_state(
-                            0.0,
-                            band.frequency,
-                            crate::window_band_fader::format_frequency_label(band.frequency),
-                            band.q,
-                            crate::window_band_fader::format_q_label(band.q),
-                            crate::core::FilterType::Bell,
-                            crate::band_fader::filter_type_short_label(
+                    if crate::core::bands_match_log_grid_frequencies(&freqs, count) {
+                        // Re-space every visible band (plus the new one) to
+                        // the even (count+1) grid.
+                        let grid = crate::core::compute_log_spaced_band_defaults(count + 1);
+                        for (i, (frequency, q)) in grid.iter().enumerate() {
+                            let Some(fader) = registry.borrow().get(i).cloned() else {
+                                continue;
+                            };
+                            let mut f = fader.borrow_mut();
+                            let is_new = i == count;
+                            let (gain, filter_type, active, mute, solo) = if is_new {
+                                (0.0, crate::core::FilterType::Bell, true, false, false)
+                            } else {
+                                (f.gain_db, f.filter_type, f.active, f.muted, f.soloed)
+                            };
+                            let selected = f.selected;
+                            f.smooth_override = smooth.get();
+                            f.set_band_state(
+                                gain,
+                                *frequency,
+                                crate::window_band_fader::format_frequency_label(*frequency),
+                                *q,
+                                crate::window_band_fader::format_q_label(*q),
+                                filter_type,
+                                crate::band_fader::filter_type_short_label(filter_type).into(),
+                                selected,
+                                active,
+                                mute,
+                                solo,
+                                solo_active,
+                            );
+                            f.drawing_area.queue_draw();
+                        }
+                    } else {
+                        // Off-grid: only the new band appears, at the centre
+                        // of the widest gap so the dots stay spread out.
+                        let frequency = largest_gap_frequency(&freqs);
+                        if let Some(fader) = registry.borrow().get(count).cloned() {
+                            let mut f = fader.borrow_mut();
+                            let selected = f.selected;
+                            f.smooth_override = smooth.get();
+                            f.set_band_state(
+                                0.0,
+                                frequency,
+                                crate::window_band_fader::format_frequency_label(frequency),
+                                1.0,
+                                crate::window_band_fader::format_q_label(1.0),
                                 crate::core::FilterType::Bell,
-                            )
-                            .into(),
-                            selected,
-                            true,
-                            false,
-                            false,
-                            solo_active,
-                        );
-                        f.drawing_area.queue_draw();
+                                crate::band_fader::filter_type_short_label(
+                                    crate::core::FilterType::Bell,
+                                )
+                                .into(),
+                                selected,
+                                true,
+                                false,
+                                false,
+                                solo_active,
+                            );
+                            f.drawing_area.queue_draw();
+                        }
                     }
                     visible.set(apply_visible_band_count(
                         scrolled.borrow().as_ref(),
@@ -1156,9 +1236,55 @@ impl WirEqWindow {
                     if count <= 1 {
                         return;
                     }
-                    let last = count - 1;
+                    let freqs: Vec<f64> = registry
+                        .borrow()
+                        .iter()
+                        .take(count)
+                        .map(|f| f.borrow().frequency)
+                        .collect();
                     let solo_active = registry.borrow().iter().any(|f| f.borrow().soloed);
-                    if let Some(fader) = registry.borrow().get(last).cloned() {
+                    let remove_index =
+                        if crate::core::bands_match_log_grid_frequencies(&freqs, count) {
+                            // Re-space the survivors to the even (count-1) grid,
+                            // then deactivate the last slot.
+                            let grid = crate::core::compute_log_spaced_band_defaults(count - 1);
+                            for (i, (frequency, q)) in grid.iter().enumerate() {
+                                let Some(fader) = registry.borrow().get(i).cloned() else {
+                                    continue;
+                                };
+                                let mut f = fader.borrow_mut();
+                                let (gain, filter_type, active, mute, solo) =
+                                    (f.gain_db, f.filter_type, f.active, f.muted, f.soloed);
+                                let selected = f.selected;
+                                f.set_band_state(
+                                    gain,
+                                    *frequency,
+                                    crate::window_band_fader::format_frequency_label(*frequency),
+                                    *q,
+                                    crate::window_band_fader::format_q_label(*q),
+                                    filter_type,
+                                    crate::band_fader::filter_type_short_label(filter_type).into(),
+                                    selected,
+                                    active,
+                                    mute,
+                                    solo,
+                                    solo_active,
+                                );
+                                f.drawing_area.queue_draw();
+                            }
+                            count - 1
+                        } else {
+                            // Off-grid: drop the highest-frequency band.
+                            freqs
+                                .iter()
+                                .enumerate()
+                                .max_by(|a, b| {
+                                    a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .map(|(i, _)| i)
+                                .unwrap_or(count - 1)
+                        };
+                    if let Some(fader) = registry.borrow().get(remove_index).cloned() {
                         let mut f = fader.borrow_mut();
                         let frequency = f.frequency;
                         let q = f.q_value;
@@ -1188,7 +1314,7 @@ impl WirEqWindow {
                         &cells.borrow(),
                         &registry.borrow(),
                         Some(&graph),
-                        last,
+                        count - 1,
                     ));
                     refresh();
                 });
