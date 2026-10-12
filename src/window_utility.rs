@@ -136,6 +136,56 @@ pub struct UtilityPane {
     /// label and nothing ever read it back.
     pub curve_dropdown: gtk4::DropDown,
     pub unlink_button: gtk4::Button,
+    /// Open pavucontrol (per-stream volume / app routing) when installed.
+    pub pavu_button: gtk4::Button,
+}
+
+/// Inside a flatpak, host programs only run through `flatpak-spawn --host`
+/// (the sandbox grants exactly that via the org.freedesktop.Flatpak talk
+/// permission); natively the program runs directly.
+fn in_flatpak() -> bool {
+    std::path::Path::new("/.flatpak-info").exists()
+}
+
+/// Whether pavucontrol can be launched from here. Meant for a background
+/// thread: `flatpak-spawn --host` costs ~100 ms, far too slow for the UI
+/// thread.
+pub(crate) fn pavucontrol_available() -> bool {
+    let (mut command, has_arg) = if in_flatpak() {
+        (std::process::Command::new("flatpak-spawn"), false)
+    } else {
+        (std::process::Command::new("which"), true)
+    };
+    if has_arg {
+        command.arg("pavucontrol");
+    } else {
+        command.args(["--host", "which", "pavucontrol"]);
+    }
+    command
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Launch pavucontrol on the host. Failures are logged, not surfaced: the
+/// button is only sensitive when the availability probe passed.
+pub(crate) fn spawn_pavucontrol() {
+    let mut command = if in_flatpak() {
+        let mut c = std::process::Command::new("flatpak-spawn");
+        c.args(["--host", "pavucontrol"]);
+        c
+    } else {
+        std::process::Command::new("pavucontrol")
+    };
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    if let Err(e) = command.spawn() {
+        log::warn!("pavucontrol launch failed: {e}");
+    }
 }
 
 impl UtilityPane {
@@ -165,6 +215,7 @@ impl UtilityPane {
             fallback_label,
             curve_dropdown,
             unlink_button,
+            pavu_button,
         ) = Self::build_output_controls();
         let output_box = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
         output_box.set_margin_top(8);
@@ -198,6 +249,7 @@ impl UtilityPane {
             fallback_label,
             curve_dropdown,
             unlink_button,
+            pavu_button,
         }
     }
 
@@ -234,6 +286,7 @@ impl UtilityPane {
         gtk4::Label,
         gtk4::DropDown,
         gtk4::Button,
+        gtk4::Button,
     ) {
         let section = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
         section.set_css_classes(&["utility-section"]);
@@ -241,7 +294,17 @@ impl UtilityPane {
         let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         let title = gtk4::Label::new(Some("Output Controls"));
         title.set_css_classes(&["heading"]);
+        title.set_hexpand(true);
+        title.set_xalign(0.0);
         header.append(&title);
+        // Open the system's volume control when it is installed. WireEQ owns
+        // routing and per-device EQ; per-stream volume/app routing stays
+        // pavucontrol's job, so a one-click jump beats digging for it.
+        let pavu_button = gtk4::Button::from_icon_name("multimedia-volume-control-symbolic");
+        pavu_button.set_tooltip_text(Some("Open pavucontrol (per-stream volume and routing)"));
+        pavu_button.set_css_classes(&["flat"]);
+        pavu_button.set_valign(gtk4::Align::Center);
+        header.append(&pavu_button);
         section.append(&header);
 
         // Output device dropdown.
@@ -341,6 +404,7 @@ impl UtilityPane {
             fallback_label,
             curve_dropdown,
             unlink_button,
+            pavu_button,
         )
     }
 

@@ -3152,6 +3152,30 @@ impl WirEqWindow {
         // so a preset created or deleted elsewhere shows up here without a
         // restart. The active device's linked preset is selected; "(none)"
         // means the fallback applies.
+        // --- Open pavucontrol from the Output page. The availability probe
+        // runs on a worker thread (flatpak-spawn costs ~100 ms); until it
+        // answers the button stays insensitive, and it reports "not
+        // installed" when the probe fails.
+        {
+            let pavu_button = utility.pavu_button.clone();
+            pavu_button.set_sensitive(false);
+            let (tx, rx) = std::sync::mpsc::channel::<bool>();
+            std::thread::spawn(move || {
+                let _ = tx.send(crate::window_utility::pavucontrol_available());
+            });
+            let pavu_button_for_probe = pavu_button.clone();
+            glib::MainContext::default().spawn_local(async move {
+                let available = rx.recv().unwrap_or(false);
+                pavu_button_for_probe.set_sensitive(available);
+                if !available {
+                    pavu_button_for_probe.set_tooltip_text(Some("pavucontrol is not installed"));
+                }
+            });
+            pavu_button.connect_clicked(|_| {
+                crate::window_utility::spawn_pavucontrol();
+            });
+        }
+
         {
             let curve_dropdown = utility.curve_dropdown.clone();
             let unlink_button = utility.unlink_button.clone();
