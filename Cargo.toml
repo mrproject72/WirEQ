@@ -1,6 +1,6 @@
 [package]
 name = "wireq"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 description = "WirEQ — system-wide parametric equalizer for PipeWire."
 license = "GPL-3.0-or-later"
