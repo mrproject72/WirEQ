@@ -12,11 +12,14 @@ finish-args:
   - --share=ipc
   - --share=network
   - --device=dri
+  # Intentional rw config share: presets, per-device curve memory and the
+  # AutoEq cache live in ~/.config/wireq and are shared with the deb/rpm
+  # installs (a migration copies the legacy mini-eq dir on first run).
   - --filesystem=xdg-config/wireq
-  - --filesystem=xdg-cache/wireq
   - --filesystem=xdg-run/pipewire-0:ro
+  # The pavucontrol launcher runs host programs via flatpak-spawn --host
+  # (documented Flathub exception, justified in the submission).
   - --talk-name=org.freedesktop.Flatpak
-  - --talk-name=io.github.mrproject72.WirEQ
   - --env=PIPEWIRE_MODULE_DIR=/app/lib/pipewire-0.3:/usr/lib/x86_64-linux-gnu/pipewire-0.3:/usr/lib/aarch64-linux-gnu/pipewire-0.3:/usr/lib/pipewire-0.3
   - --env=SPA_PLUGIN_DIR=/app/lib/spa-0.2:/usr/lib/x86_64-linux-gnu/spa-0.2:/usr/lib/aarch64-linux-gnu/spa-0.2:/usr/lib/spa-0.2
 

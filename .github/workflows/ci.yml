@@ -51,6 +51,46 @@ jobs:
         with:
           name: wireq-linux-x86_64
           path: target/release/wireq
+  packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libgraphene-1.0-dev \
+            libpipewire-0.3-dev \
+            libspa-0.2-dev \
+            libdbus-1-dev \
+            libssl-dev \
+            pkg-config
+      - name: Build release binary
+        run: cargo build --release
+      - name: Build the Debian package
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb --no-build
+          dpkg-deb -I target/debian/*.deb | grep -E "Package|Version|Depends"
+          dpkg-deb -c target/debian/*.deb >/dev/null && echo "deb contents OK"
+      - name: Build the RPM package
+        run: |
+          cargo install cargo-generate-rpm --locked
+          cargo generate-rpm
+          file target/generate-rpm/*.rpm
+      - name: Upload the Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireq-amd64.deb
+          path: target/debian/*.deb
+      - name: Upload the RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireq-x86_64.rpm
+          path: target/generate-rpm/*.rpm
   flatpak:
     runs-on: ubuntu-latest
     container:

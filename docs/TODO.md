@@ -43,11 +43,21 @@ drag editing, exit reliability). Ranked next steps:
    bypass-neutrality push (every mixer dry, filters still addressed).
    The deeper routing paths that need a live engine are covered by the
    containerised PipeWire smoke test below and the gold path.
-5. **Flathub submission** — the rebrand is done (app ID
-   `io.github.mrproject72.WirEQ`, the manifest/metainfo/icons renamed);
-   the submission itself needs the Flathub repo setup + maintainer
-   review on the GitHub account. The GNOME Shell extension from
-   upstream is a separate follow-up.
+5. **Flathub submission** — READY 2026-10-12: the manifest lints with
+   only two documented policy exceptions (pavucontrol launcher via
+   flatpak-spawn, deliberate config sharing with native installs — see
+   `docs/flathub-submission.md`), the metainfo passes pedantic
+   validation, and the gold path passes against the exact submission
+   manifest. The submission itself needs the account owner: fork
+   flathub/flathub, add the manifest + metainfo, open the PR with the
+   justifications.
+   **deb/rpm packaging — DONE 2026-10-12**: `cargo deb` and
+   `cargo generate-rpm` metadata in Cargo.toml, a CI `packages` job
+   builds and uploads both artifacts; the deb was smoke-tested by
+   extraction (correct auto-derived depends incl. libdbus-1-3, full
+   hicolor icon set) and the RPM built (explicit gtk4/libadwaita/
+   pipewire-libs requires). The GNOME Shell extension from
+   upstream is not applicable: no extension exists in upstream's tree.
 6. ~~**AGENTS.md phase status refresh**~~ — DONE 2026-10-11 (part of the
    WirEQ rebrand commit: all phases ✅, the stale graph claims removed).
 

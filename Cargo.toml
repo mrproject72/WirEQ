@@ -69,3 +69,128 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"] }
 opt-level = 3
 lto = true
 panic = "abort"
+
+# Debian packaging (cargo-deb). The desktop file, metainfo and the hicolor
+# icon set mirror the flatpak manifest's install step.
+[package.metadata.deb]
+maintainer = "mrproject72 <mrproject72@gmail.com>"
+copyright = "2026, mrproject72"
+license-file = ["LICENSE", "0"]
+extended-description = """\
+WirEQ is a compact system-wide parametric equalizer for PipeWire desktops.
+It creates a virtual sink with a native-biquad filter chain, routes output
+streams into it and edits the curve live: faders, a draggable frequency
+graph, AutoEq/APO preset import, per-device curve memory and LUFS/peak
+metering."""
+depends = "$auto, libadwaita-1-0, libpipewire-0.3-0, libdbus-1-3"
+section = "sound"
+priority = "optional"
+assets = [
+    ["target/release/wireq", "usr/bin/", "755"],
+    ["assets/io.github.mrproject72.WirEQ.desktop", "usr/share/applications/", "644"],
+    ["assets/metainfo/io.github.mrproject72.WirEQ.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["assets/icons/16x16/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/16x16/apps/", "644"],
+    ["assets/icons/16x16/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/16x16/apps/", "644"],
+    ["assets/icons/24x24/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/24x24/apps/", "644"],
+    ["assets/icons/24x24/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/24x24/apps/", "644"],
+    ["assets/icons/32x32/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/32x32/apps/", "644"],
+    ["assets/icons/32x32/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/32x32/apps/", "644"],
+    ["assets/icons/48x48/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/48x48/apps/", "644"],
+    ["assets/icons/48x48/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/48x48/apps/", "644"],
+    ["assets/icons/64x64/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["assets/icons/64x64/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["assets/icons/128x128/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/128x128/apps/", "644"],
+    ["assets/icons/128x128/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/128x128/apps/", "644"],
+    ["assets/icons/256x256/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
+    ["assets/icons/256x256/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
+    ["assets/icons/512x512/apps/io.github.mrproject72.WirEQ.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+    ["assets/icons/512x512/apps/io.github.mrproject72.WirEQ-symbolic.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+]
+
+# RPM packaging (cargo-generate-rpm). Fedora's runtime package names for the
+# same shared objects the deb depends on.
+[package.metadata.generate-rpm]
+license = "GPL-3.0-or-later"
+summary = "System-wide parametric equalizer for PipeWire"
+description = """WirEQ is a compact system-wide parametric equalizer for PipeWire desktops. \
+It creates a virtual sink with a native-biquad filter chain, routes output \
+streams into it and edits the curve live: faders, a draggable frequency \
+graph, AutoEq/APO preset import, per-device curve memory and LUFS/peak metering."""
+requires = { gtk4 = ">= 4.6", libadwaita = ">= 1.4", pipewire-libs = ">= 0.3" }
+auto-req = "no"
+[[package.metadata.generate-rpm.assets]]
+source = "target/release/wireq"
+dest = "/usr/bin/wireq"
+mode = "755"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/io.github.mrproject72.WirEQ.desktop"
+dest = "/usr/share/applications/io.github.mrproject72.WirEQ.desktop"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/metainfo/io.github.mrproject72.WirEQ.metainfo.xml"
+dest = "/usr/share/metainfo/io.github.mrproject72.WirEQ.metainfo.xml"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/16x16/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/16x16/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/16x16/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/16x16/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/24x24/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/24x24/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/24x24/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/24x24/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/32x32/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/32x32/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/32x32/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/32x32/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/48x48/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/48x48/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/48x48/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/48x48/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/64x64/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/64x64/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/64x64/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/64x64/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/128x128/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/128x128/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/128x128/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/128x128/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/256x256/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/256x256/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/256x256/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/256x256/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/512x512/apps/io.github.mrproject72.WirEQ.png"
+dest = "/usr/share/icons/hicolor/512x512/apps/io.github.mrproject72.WirEQ.png"
+mode = "644"
+[[package.metadata.generate-rpm.assets]]
+source = "assets/icons/512x512/apps/io.github.mrproject72.WirEQ-symbolic.png"
+dest = "/usr/share/icons/hicolor/512x512/apps/io.github.mrproject72.WirEQ-symbolic.png"
+mode = "644"
