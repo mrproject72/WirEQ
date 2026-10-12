@@ -1,0 +1,158 @@
+app-id: io.github.mrproject72.WirEQ
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.llvm21
+command: wireq
+finish-args:
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --share=ipc
+  - --share=network
+  - --device=dri
+  # Intentional rw config share: presets, per-device curve memory and the
+  # AutoEq cache live in ~/.config/wireq and are shared with the deb/rpm
+  # installs (a migration copies the legacy mini-eq dir on first run).
+  - --filesystem=xdg-config/wireq
+  - --filesystem=xdg-run/pipewire-0:ro
+  # The pavucontrol launcher runs host programs via flatpak-spawn --host
+  # (documented Flathub exception, justified in the submission).
+  - --talk-name=org.freedesktop.Flatpak
+  - --env=PIPEWIRE_MODULE_DIR=/app/lib/pipewire-0.3:/usr/lib/x86_64-linux-gnu/pipewire-0.3:/usr/lib/aarch64-linux-gnu/pipewire-0.3:/usr/lib/pipewire-0.3
+  - --env=SPA_PLUGIN_DIR=/app/lib/spa-0.2:/usr/lib/x86_64-linux-gnu/spa-0.2:/usr/lib/aarch64-linux-gnu/spa-0.2:/usr/lib/spa-0.2
+
+cleanup:
+  - /include
+  - /etc/bash_completion.d
+  - /lib/pkgconfig
+  - /share/doc
+  - /share/gtk-doc
+  - /share/locale
+  - /share/man
+  - /share/pkgconfig
+  - "*.a"
+  - "*.la"
+
+modules:
+  - name: libebur128
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - -DBUILD_SHARED_LIBS=ON
+      - -DENABLE_TESTS=OFF
+      - -DENABLE_FUZZER=OFF
+    sources:
+      - type: git
+        url: https://github.com/jiixyj/libebur128.git
+        tag: v1.2.6
+        commit: 67b33abe1558160ed76ada1322329b0e9e058b02
+
+  - name: pipewire-filter-chain-module
+    buildsystem: meson
+    config-opts:
+      - -Dauto_features=disabled
+      - -Ddocs=disabled
+      - -Dman=disabled
+      - -Dexamples=disabled
+      - -Dtests=disabled
+      - -Dinstalled_tests=disabled
+      - -Dgstreamer=disabled
+      - -Dgstreamer-device-provider=disabled
+      - -Dsession-managers=[]
+      - -Dsystemd-system-service=disabled
+      - -Dsystemd-user-service=disabled
+      - -Dlibsystemd=disabled
+      - -Dlogind=disabled
+      - -Dpipewire-alsa=disabled
+      - -Dpipewire-jack=disabled
+      - -Dpipewire-v4l2=disabled
+      - -Dselinux=disabled
+      - -Dspa-plugins=enabled
+      - -Daudioconvert=enabled
+      - -Daudiomixer=disabled
+      - -Dcontrol=disabled
+      - -Dsupport=disabled
+      - -Dalsa=disabled
+      - -Dbluez5=disabled
+      - -Djack=disabled
+      - -Dv4l2=disabled
+      - -Dlibcamera=disabled
+      - -Dvulkan=disabled
+      - -Dffmpeg=disabled
+      - -Dudev=disabled
+      - -Ddbus=disabled
+      - -Dsdl2=disabled
+      - -Dsndfile=disabled
+      - -Dlibmysofa=disabled
+      - -Dlibpulse=disabled
+      - -Droc=disabled
+      - -Davahi=disabled
+      - -Draop=disabled
+      - -Dreadline=disabled
+      - -Decho-cancel-webrtc=disabled
+      - -Dlibusb=disabled
+      - -Dx11=disabled
+      - -Dx11-xfixes=disabled
+      - -Dlibcanberra=disabled
+      - -Davb=disabled
+      - -Dgsettings=disabled
+      - -Dcompress-offload=disabled
+      - -Dopus=disabled
+      - -Dlibffado=disabled
+      - -Dsnap=disabled
+      - -Debur128=disabled
+      - -Dfftw=disabled
+      - -Dlv2=disabled
+      - -Donnxruntime=disabled
+      - -Daudiotestsrc=disabled
+      - -Dvideoconvert=disabled
+      - -Dvideotestsrc=disabled
+      - -Dpw-cat=disabled
+      - -Dpw-cat-ffmpeg=disabled
+      - -Dlegacy-rtkit=false
+      - -Drlimits-install=false
+      - -Dflatpak=enabled
+    make-args:
+      - src/modules/libpipewire-module-filter-chain.so
+      - spa/plugins/filter-graph/libspa-filter-graph.so
+      - spa/plugins/filter-graph/libspa-filter-graph-plugin-builtin.so
+    no-make-install: true
+    build-commands:
+      - install -Dm755 src/modules/libpipewire-module-filter-chain.so ${FLATPAK_DEST}/lib/pipewire-0.3/libpipewire-module-filter-chain.so
+      - install -Dm755 spa/plugins/filter-graph/libspa-filter-graph.so ${FLATPAK_DEST}/lib/spa-0.2/filter-graph/libspa-filter-graph.so
+      - install -Dm755 spa/plugins/filter-graph/libspa-filter-graph-plugin-builtin.so ${FLATPAK_DEST}/lib/spa-0.2/filter-graph/libspa-filter-graph-plugin-builtin.so
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/pipewire/pipewire.git
+        tag: 1.6.9
+        commit: 8fa27cabdc6c0c1350c69c026af5850ef0af1e26
+
+  - name: wireq
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm21/bin
+      env:
+        CARGO_HOME: /run/build/wireq/cargo
+        CARGO_NET_OFFLINE: "true"
+        LIBCLANG_PATH: /usr/lib/sdk/llvm21/lib
+    build-commands:
+      - mkdir -p .cargo && cp cargo/config .cargo/config.toml
+      - cargo build --release --offline --frozen
+      - install -Dm755 target/release/wireq ${FLATPAK_DEST}/bin/wireq
+      - install -Dm644 assets/metainfo/io.github.mrproject72.WirEQ.metainfo.xml -t ${FLATPAK_DEST}/share/metainfo
+      - install -Dm644 assets/io.github.mrproject72.WirEQ.desktop -t ${FLATPAK_DEST}/share/applications
+      - rm -rf ${FLATPAK_DEST}/share/icons
+      - mkdir -p ${FLATPAK_DEST}/share/icons/hicolor
+      - for size in 16x16 24x24 32x32 48x48 64x64 128x128 256x256 512x512; do install -Dm644 assets/icons/$size/apps/io.github.mrproject72.WirEQ.png ${FLATPAK_DEST}/share/icons/hicolor/$size/apps/io.github.mrproject72.WirEQ.png; install -Dm644 assets/icons/$size/apps/io.github.mrproject72.WirEQ-symbolic.png ${FLATPAK_DEST}/share/icons/hicolor/$size/apps/io.github.mrproject72.WirEQ-symbolic.png || true; done
+      - gtk-update-icon-cache --force ${FLATPAK_DEST}/share/icons/hicolor || true
+    sources:
+      - type: git
+        url: https://github.com/mrproject72/WirEQ.git
+        tag: v0.12.0
+        commit: dd5df5c0a17e60f172afb60fbf891b79392ef722
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([0-9.]+)
+      - cargo-sources.json

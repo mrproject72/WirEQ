@@ -56,10 +56,16 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/Screenshot%20From%202026-09-18%2021-27-35.png</image>
+      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/wireq-main.png</image>
+      <caption>The main window: draggable frequency-response graph, spectrum and faders</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/Screenshot%20From%202026-09-18%2021-29-43.png</image>
+      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/wireq-output.png</image>
+      <caption>Output Controls: per-device presets, fallback curve and a pavucontrol launcher</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/mrproject72/WirEQ/main/screenshot/wireq-presets.png</image>
+      <caption>Preset management: built-ins, import and export</caption>
     </screenshot>
   </screenshots>
 
